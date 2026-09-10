@@ -18,8 +18,12 @@
 
 KartPad runs a statically recompiled Mario Kart Wii runtime directly on an ARM64 Android device. WiiCompiled translates the supported game's PowerPC code ahead of time; the native runtime provides graphics, audio, input, storage and lifecycle handling.
 
-<img width="1920" height="1080" alt="kart1" src="https://github.com/user-attachments/assets/cb4b46e1-732f-47cf-bdf5-ba1fb914e794" />
-
+<p align="center">
+<img width="640" height="360" alt="kart1" src="https://github.com/user-attachments/assets/cb4b46e1-732f-47cf-bdf5-ba1fb914e794" />
+<img width="640" height="360" alt="kart2" src="https://github.com/user-attachments/assets/70309df8-449e-44c6-8509-74f7a9ed27fc" />
+<img width="640" height="360" alt="kart4" src="https://github.com/user-attachments/assets/3f662ecb-0da6-48a1-92f6-e210ff249128" />
+</p>
+  
 Gameplay runs locally, without streaming from another computer. This is a game-specific port, not a general-purpose loader for arbitrary Wii games. Its compatibility runtime draws on Dolphin-derived components and research.
 
 The two target environments are:
@@ -49,6 +53,10 @@ This fork's AAOS development focuses on reducing native CPU overhead and making 
 - Improvements to floating-point processing in the translated runtime.
 - CPU affinity adjustments to make better use of high-performance cores.
 - Additional **0.75×** and **0.5×** rendering options in the customized build.
+
+<p align="center">
+<img width="640" height="360" alt="kart3" src="https://github.com/user-attachments/assets/96cfaf4e-1429-43d8-b9c6-10b50b706e2a" />
+</p>
 
 The maintainer reports approximately **50–60 FPS in tested gameplay on an SA8155P-equipped AAOS vehicle** after these optimizations. This is a device- and build-specific observation, not a guaranteed frame rate across all tracks, devices or sessions.
 
