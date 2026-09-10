@@ -6,48 +6,32 @@ client can log in to a compatible isolated WFC service, match, form a room,
 vote, exchange live race packets, finish through the retail online result path,
 apply ratings, and return to the shared lobby.
 
-The local checkpoint does not establish Wiimmfi compatibility or Wii
-interoperability. Later owner-reported Android Retro WFC login, worldwide
-matchmaking and live racing are recorded in the
-[first Android release evidence](artifacts/2026-09-07/android/first-release-verification.md).
-Complete public-service results/reconnect and broad physical-device coverage
-remain open; the historical service outage below is not a current blocker.
+That evidence does not yet establish public Retro WFC service compatibility,
+Wiimmfi compatibility, Wii interoperability, or physical-device online
+acceptance. `v0.4.0-preview.1` is the public online-capable dual-mode preview, but
+it is not accepted for live public Retro WFC or physical-device online play
+while the external service is unavailable. The local harness result does not
+establish either claim.
 
-## Wiimmfi and console identity
+No account, credential, public-service authorization, or production-service
+compatibility is currently claimed. This loop uses the pinned authorized local
+server first and never commits credentials, payloads, private keys, captures,
+game data, translated code, or saves.
 
-Wiimmfi for Original Mario Kart Wii is an open compatibility request
-([#90](https://github.com/chrissotraidis/kartpad/issues/90)), with no accepted
-implementation or release date. KartPad executes an ahead-of-time compiled
-game graph: importing a patched ISO does not replace that native graph. A
-server address or MAC field alone does not implement the game's service patch,
-authentication/identity handling, or interoperability. A future integration
-needs a reproducible matching executable profile, private identity handling,
-and verification through race/results/reconnect on the intended platforms.
-Do not upload NAND backups, certificates, or console identifiers to an issue.
-
-Issue [#94](https://github.com/chrissotraidis/kartpad/issues/94) exposed a separate
-numeric serial defect. Corrected packages are Android `v0.4.10-android.1`,
-iPhone/iPad `v0.4.11`, Mac `v0.4.11-macos.1`, and experimental Apple TV
-`v0.4.11-tvos.1`. Old packages should remain offline. The client correction
-preserves identities and saves; it cannot remove bad historical CSNums or
-reverse existing service bans. Affected histories require service-admin review,
-not save deletion or identity regeneration. See the
-[backport evidence](iterations/issue94-csnum-hotfix.md).
-
-## Historical production Retro WFC boundary on 6 September 2026
+## Production Retro WFC service boundary on 6 September 2026
 
 Retro WFC's public health endpoint and room feed are reachable again and report
 active service. This clears the external outage that previously prevented a
 production retest; it does not itself establish KartPad compatibility.
 
-During the earlier outage, the exact released KartPad 0.3.0 build received a
-successful NAS authentication response and advanced to GameSpy profile login.
-The public gameplay-login endpoint then did not accept a TCP
+During the earlier outage, the exact released KartPad 0.3.0 build reached the
+receives a successful NAS authentication response, and advances to GameSpy
+profile login. The public gameplay-login endpoint then did not accept a TCP
 connection, and the game reported `61070`. The same endpoint timed out from the
 macOS host. That historical result is not evidence for the recovered service or
 the 0.4.4 candidate.
 
-The 0.4.4 candidate was awaiting a retest of NAS authentication, GameSpy login,
+The exact 0.4.4 candidate must now retest NAS authentication, GameSpy login,
 matchmaking, room entry, a complete race, results, and reconnect before making
 a production-online claim. Physical-device acceptance remains separate.
 
@@ -145,7 +129,7 @@ instrumentation before a third attempt.
   impairment, reconnect, physical-device online, and cross-client
   interoperability rows remain open until the exact candidate is run.
 
-## Historical Android local-server boundary on 5 September 2026
+## Android local-server boundary on 5 September 2026
 
 The pinned server can now be reconstructed with
 `scripts/test-android-local-wfc-server.sh`. Its PostgreSQL 17 image is locked by

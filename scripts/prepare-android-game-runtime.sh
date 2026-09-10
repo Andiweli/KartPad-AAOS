@@ -81,12 +81,6 @@ patch --batch -p1 -d "$runtime_source" < \
 patch --batch -p1 -d "$runtime_source" < \
   "$repo_root/patches/aurora-android-phase-metrics.patch"
 patch --batch -p1 -d "$runtime_source" < \
-  "$repo_root/patches/aurora-opt-in-renderer-validation.patch"
-cp "$repo_root/runtime/include/kartpad/diagnostics/draw_inputs.h" \
-  "$runtime_source/aurora-main/lib/gx/kartpad_draw_inputs.hpp"
-patch --batch -p1 -d "$runtime_source" < \
-  "$repo_root/patches/aurora-draw-input-diagnostics.patch"
-patch --batch -p1 -d "$runtime_source" < \
   "$repo_root/patches/wiicompiled-android-scalar-ni-transition.patch"
 patch --batch -p1 -d "$runtime_source" < \
   "$repo_root/patches/wiicompiled-android-network-tls.patch"
@@ -94,9 +88,6 @@ patch --batch -p1 -d "$runtime_source" < \
   "$repo_root/patches/wiicompiled-android-tls-ioctlv-fixture.patch"
 patch --batch -p1 -d "$runtime_source" < \
   "$repo_root/patches/wiicompiled-android-dns-ioctl-fixture.patch"
-
-patch --batch -p1 -d "$runtime_source" < \
-  "$repo_root/patches/wiicompiled-android-network-stall.patch"
 
 generated_link="$(dirname "$runtime_source")/generated"
 if [[ -e "$generated_link" && ! -L "$generated_link" ]]; then

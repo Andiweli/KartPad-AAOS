@@ -1,20 +1,14 @@
 # Install KartPad on Apple Silicon Mac
 
-KartPad 0.4.11 (build 26) is an ad-hoc-signed native arm64 app for Apple Silicon Macs
+KartPad 0.4.9 is an ad-hoc-signed native arm64 app for Apple Silicon Macs
 running macOS 14 or newer. It contains the Original Mario Kart Wii and Retro
 Rewind executable profiles but no disc image, extracted game assets, Retro
 Rewind pack, saves, account data, or Apple signing identity.
 
-**Update before online play.** This build corrects the console-serial collision
-reported in [#94](https://github.com/chrissotraidis/kartpad/issues/94). It preserves
-identities, friend codes and saves; existing incorrect server-side history or
-bans may need service-admin review. Do not reset identities to work around them.
-
-1. Download `KartPad-v0.4.11-macos.1-arm64.zip` and `SHA256SUMS` from the
-   [corrected Mac release](https://github.com/chrissotraidis/kartpad/releases/tag/v0.4.11-macos.1).
+1. Download `KartPad-v0.4.9-macos-arm64.zip` and `SHA256SUMS` from the
+   [0.4.9 release](https://github.com/chrissotraidis/kartpad/releases/tag/v0.4.9).
 2. Run `shasum -a 256 -c SHA256SUMS`, then extract the ZIP and move
-   `KartPad.app` to Applications after quitting the old app. Replace only the
-   application, not its Application Support folder or your game-data folders.
+   `KartPad.app` to Applications.
 3. Open KartPad. If Gatekeeper blocks the ad-hoc-signed community app,
    Control-click it, choose **Open**, review the warning, and choose **Open**
    again. Do not disable Gatekeeper system-wide.

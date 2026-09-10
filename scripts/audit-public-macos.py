@@ -14,9 +14,9 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 
-RELEASE_TAG = "v0.4.11-macos.1"
-APP_VERSION = "0.4.11"
-APP_BUILD = "26"
+RELEASE_TAG = "v0.4.9"
+APP_VERSION = "0.4.9"
+APP_BUILD = "23"
 FORBIDDEN_SUFFIXES = {".iso", ".wbfs", ".rvz", ".wia", ".gcz", ".gcm", ".ciso",
                       ".sav", ".p12", ".p8", ".pem", ".key", ".cer"}
 REQUIRED_ENTRIES = {
@@ -25,20 +25,9 @@ REQUIRED_ENTRIES = {
     "KartPadMacProvenance.json",
     "INSTALL_MACOS.md",
     "RELEASE_NOTES.md",
-    "LICENSE",
-    "LICENSES/GPL-3.0.txt",
     "RIGHTS_AND_LICENSES.md",
     "ThirdPartyLicenses/Aurora-MIT.txt",
     "ThirdPartyLicenses/WiiCompiled-GPL-3.0.txt",
-    "ThirdPartyLicenses/Abseil-Apache-2.0.txt",
-    "ThirdPartyLicenses/FreeType.txt",
-    "ThirdPartyLicenses/SDL3-Zlib.txt",
-    "ThirdPartyLicenses/Tracy-BSD-3-Clause.txt",
-    "ThirdPartyLicenses/fmt-MIT.txt",
-    "ThirdPartyLicenses/imgui-MIT.txt",
-    "ThirdPartyLicenses/libpng.txt",
-    "ThirdPartyLicenses/xxHash-BSD-2-Clause.txt",
-    "ThirdPartyLicenses/zstd-BSD.txt",
 }
 EXPECTED_SYMLINKS = {
     "KartPad.app/Contents/MacOS/build-fingerprint.json":

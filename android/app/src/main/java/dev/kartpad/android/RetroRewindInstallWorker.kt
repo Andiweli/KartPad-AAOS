@@ -1,17 +1,7 @@
 package dev.kartpad.android
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import android.content.pm.ServiceInfo
-import android.os.Build
 import android.util.Log
-import androidx.work.CoroutineWorker
-import androidx.work.ForegroundInfo
-import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import java.io.InputStream
 import java.nio.file.Files
@@ -19,17 +9,28 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
-/** Durable, unique foreground worker for the production Retro Rewind install. */
+/** In-process installer; never schedules a service or background job. */
 internal class RetroRewindInstallWorker(
-    appContext: Context,
-    parameters: WorkerParameters,
-) : CoroutineWorker(appContext, parameters) {
-    override suspend fun getForegroundInfo(): ForegroundInfo = foregroundInfo("Preparing installation…")
+    private val applicationContext: Context,
+    private val inputData: androidx.work.Data,
+    private val stopped: () -> Boolean,
+    private val report: (androidx.work.Data) -> Unit,
+) {
+    private val isStopped: Boolean get() = stopped()
+    private val id = "visible-install"
+    private val runAttemptCount = 0
+    private fun setProgress(data: androidx.work.Data) = report(data)
+    private fun setProgressAsync(data: androidx.work.Data) = report(data)
+    internal data class Result(val successful: Boolean, val data: androidx.work.Data) {
+        companion object {
+            fun success(data: androidx.work.Data) = Result(true, data)
+            fun failure(data: androidx.work.Data) = Result(false, data)
+        }
+    }
 
-    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+    suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val token = inputData.getString(RetroRewindInstallWork.KEY_TOKEN)
             ?: return@withContext failure("missing-token")
-        setForeground(foregroundInfo("Preparing installation…"))
         if (inputData.getBoolean(RetroRewindInstallWork.KEY_DEBUG_FIXTURE, false)) {
             if (!BuildConfig.DEBUG || BuildConfig.GAME_RUNTIME) {
                 return@withContext failure("fixture-disabled")
@@ -42,7 +43,6 @@ internal class RetroRewindInstallWorker(
             return@withContext failure("recovery")
         }
 
-        setForeground(foregroundInfo("Checking Retro Rewind version…"))
         setPhase("version", 0, 0)
         val version = RetroRewindVersionCheck.checkRelease { isStopped }
         if (!version.isReady) {
@@ -67,7 +67,6 @@ internal class RetroRewindInstallWorker(
             return@withContext failure("space-${space.error.name.lowercase()}")
         }
 
-        setForeground(foregroundInfo("Downloading Retro Rewind…"))
         setPhase("download", 0, RetroRewindRelease.ARCHIVE_BYTES)
         var lastDownloadPercent = -1L
         val download = RetroRewindArchiveDownload.downloadRelease(
@@ -78,14 +77,11 @@ internal class RetroRewindInstallWorker(
                 if (percent != lastDownloadPercent) {
                     lastDownloadPercent = percent
                     setProgressAsync(progressData("download", completed, total))
-                    setForegroundAsync(
-                        foregroundInfo("Downloading Retro Rewind…", completed, total),
-                    )
                 }
             },
         )
         when (RetroRewindInstallWorkPolicy.afterDownload(download.error)) {
-            RetroRewindInstallWorkPolicy.Action.RETRY -> return@withContext Result.retry()
+            RetroRewindInstallWorkPolicy.Action.RETRY -> return@withContext failure("download-network_failure")
             RetroRewindInstallWorkPolicy.Action.FAILURE ->
                 return@withContext failure("download-${download.error.name.lowercase()}")
             RetroRewindInstallWorkPolicy.Action.CANCELLED ->
@@ -93,7 +89,6 @@ internal class RetroRewindInstallWorker(
             RetroRewindInstallWorkPolicy.Action.CONTINUE -> Unit
         }
 
-        setForeground(foregroundInfo("Installing Retro Rewind…"))
         setPhase("extract", 0, 0)
         var lastExtractPercent = -1L
         val install = RetroRewindInstallPipeline.install(
@@ -106,9 +101,6 @@ internal class RetroRewindInstallWorker(
                 if (percent != lastExtractPercent) {
                     lastExtractPercent = percent
                     setProgressAsync(progressData("extract", completed, total))
-                    setForegroundAsync(
-                        foregroundInfo("Installing Retro Rewind…", completed, total),
-                    )
                 }
             },
         )
@@ -228,60 +220,6 @@ internal class RetroRewindInstallWorker(
         return Result.failure(androidx.work.Data.Builder().putAll(values).build())
     }
 
-    private fun foregroundInfo(
-        message: String,
-        completed: Long = 0,
-        total: Long = 0,
-    ): ForegroundInfo {
-        val notifications = applicationContext.getSystemService(NotificationManager::class.java)
-        notifications.createNotificationChannel(
-            NotificationChannel(
-                NOTIFICATION_CHANNEL,
-                "Game data installation",
-                NotificationManager.IMPORTANCE_LOW,
-            ),
-        )
-        val notificationBuilder = Notification.Builder(applicationContext, NOTIFICATION_CHANNEL)
-            .setSmallIcon(R.drawable.ic_kartpad)
-            .setContentTitle("KartPad")
-            .setContentText(message)
-            .setContentIntent(
-                PendingIntent.getActivity(
-                    applicationContext,
-                    NOTIFICATION_ID,
-                    Intent(applicationContext, RetroRewindInstallActivity::class.java)
-                        .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                ),
-            )
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-        if (Build.VERSION.SDK_INT >= 31) {
-            notificationBuilder.setForegroundServiceBehavior(
-                Notification.FOREGROUND_SERVICE_IMMEDIATE,
-            )
-        }
-        if (total > 0 && completed in 0..total) {
-            notificationBuilder.setProgress(
-                PROGRESS_MAX,
-                (completed * PROGRESS_MAX / total).toInt(),
-                false,
-            )
-        } else {
-            notificationBuilder.setProgress(0, 0, true)
-        }
-        val notification = notificationBuilder.build()
-        return if (Build.VERSION.SDK_INT >= 29) {
-            ForegroundInfo(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
-            )
-        } else {
-            ForegroundInfo(NOTIFICATION_ID, notification)
-        }
-    }
-
     private fun progressData(phase: String, completed: Long, total: Long) = workDataOf(
         RetroRewindInstallWork.KEY_PHASE to phase,
         RetroRewindInstallWork.KEY_COMPLETED_BYTES to completed,
@@ -289,9 +227,6 @@ internal class RetroRewindInstallWorker(
     )
 
     companion object {
-        private const val NOTIFICATION_CHANNEL = "kartpad-game-data-install"
-        private const val NOTIFICATION_ID = 0x4b50
-        private const val PROGRESS_MAX = 100
         private const val LOG_TAG = "KartPadFixture"
         private const val DEBUG_RESUME_CONTENT =
             "durable-resume-fixture-durable-resume-fixture-" +

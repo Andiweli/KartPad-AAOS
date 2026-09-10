@@ -34,8 +34,8 @@ class AndroidGameDataSaveContractTests(unittest.TestCase):
         self.assertIn("cornerRadius = dp(18).toFloat()", launcher)
         self.assertIn("setModeText(this, \"Mario Kart Wii\", \"Original game\")", launcher)
         self.assertIn("minOf(760, maxOf(320, availableWidthDp))", launcher)
-        self.assertIn("setImageResource(R.drawable.kartpad_app_icon)", launcher)
         for icon in (
+            "ic_kartpad_steering_wheel",
             "ic_kartpad_checkered_flag",
             "ic_kartpad_gobackward",
         ):
@@ -86,9 +86,7 @@ class AndroidGameDataSaveContractTests(unittest.TestCase):
         self.assertIn('KartPadOpenDiscDescriptor(fd)', native)
         self.assertIn('volume->GetGameID(partition) != "RMCP01"', native)
         self.assertIn("DiscIO::ExportSystemData", native)
-        self.assertIn("ExportCheckedDirectory", native)
-        self.assertIn("!DiscIO::ExportFile", native)
-        self.assertIn("space.available < required", native)
+        self.assertIn("DiscIO::ExportDirectory", native)
         self.assertIn("kartpadDiscIoJniRoot", gradle)
         self.assertIn("4f8af23db516d8b6e9cd00e7b261a65b026514a8", build)
 
@@ -106,7 +104,6 @@ class AndroidGameDataSaveContractTests(unittest.TestCase):
             activity.index("KartPadSaveStorage.applyPending(filesDir)"),
             activity.index("super.onCreate(savedInstanceState)"),
         )
-        self.assertIn("saveRestoreStartupError?.let { throw IllegalStateException(it) }", activity)
         self.assertIn("SAVE_BYTES = 0x2bc000", storage)
         self.assertIn('"RKSD0006"', storage)
         self.assertIn("CRC32()", storage)

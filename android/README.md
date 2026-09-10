@@ -1,3 +1,5 @@
+> **AST AAOS 1.0:** Aktive Build-Anleitung: [README_AAOS_DE.md](../README_AAOS_DE.md). Dieses Paket baut die Oberfläche mit der enthaltenen nativen Runtime. Die folgende unveränderte Upstream-Anleitung beschreibt den separaten vollständigen nativen Neubau und frühere Fixtures.
+
 # KartPad Android
 
 Android is now a supported community platform. The first release is
@@ -7,10 +9,6 @@ Razer Kishi, automatic touch hiding, and owner-reported Retro Rewind 6.12.7
 Retro WFC worldwide race play on Pixel 9 Pro XL. Read
 [installation, update safety and known limits](../docs/INSTALL_ANDROID.md).
 Sustained 60 FPS and complete device/controller coverage are not claimed.
-
-[Android 0.4.12-android.1](https://github.com/chrissotraidis/kartpad/releases/tag/v0.4.12-android.1)
-is a testing update for save transfer and disc imports; physical acceptance of
-those changes is pending. The build instructions below target that version.
 
 ## Build the full playable app on an Apple Silicon Mac
 
@@ -22,7 +20,7 @@ private translated graph; the installed app's size is not the build-space cost.
 ```sh
 git clone https://github.com/chrissotraidis/kartpad.git
 cd kartpad
-git checkout v0.4.12-android.1
+git checkout v0.4.10-android.1
 ./scripts/build-user-ipa.sh bootstrap
 ./scripts/bootstrap-android-host.sh
 ./scripts/check-android-host.sh
@@ -42,12 +40,13 @@ bootstrap prepares the following pinned Retro 6.12.7 input paths:
   --retro-root private/builder/retro-rewind-downloads/6.12.7-extracted/RetroRewind6 \
   --payload private/builder/retro-rewind-downloads/payload.RMCPD00.bin
 
-KARTPAD_ANDROID_VERSION_NAME=0.4.12-android.1 \
-KARTPAD_ANDROID_VERSION_CODE=22 \
+KARTPAD_ANDROID_PROFILEABLE=1 \
+KARTPAD_ANDROID_VERSION_NAME=0.4.10-android.1 \
+KARTPAD_ANDROID_VERSION_CODE=21 \
 KARTPAD_ANDROID_PACKAGE_FORMAT=aab \
   ./scripts/build-android-game-app.sh private/self-build/retro-rewind/translation
 
-KARTPAD_ANDROID_EXPECTED_VERSION_NAME=0.4.12-android.1 \
+KARTPAD_ANDROID_EXPECTED_VERSION_NAME=0.4.10-android.1 \
   ./scripts/audit-android-bundle.sh android/app/build/outputs/bundle/release/app-release.aab
 ```
 
@@ -60,7 +59,7 @@ patches: the wrapper reuses an existing prepared source directory.
 For a locally installable debug-signed APK, use the same build command with
 `KARTPAD_ANDROID_PACKAGE_FORMAT=apk`; it writes
 `android/app/build/outputs/apk/debug/app-debug.apk`. Audit it with
-`KARTPAD_ANDROID_EXPECTED_VERSION_NAME=0.4.12-android.1 ./scripts/audit-android-package.sh PATH.apk`.
+`KARTPAD_ANDROID_EXPECTED_VERSION_NAME=0.4.10-android.1 ./scripts/audit-android-package.sh PATH.apk`.
 That debug build is for personal testing, not public distribution, and cannot
 update a differently signed public app. A source-only fixture is not the game.
 
@@ -77,7 +76,7 @@ KARTPAD_ANDROID_KEY_ALIAS=kartpad-release \
 KARTPAD_ANDROID_PASSWORD_FILE=/absolute/private/path/password.txt \
   ./scripts/derive-android-release-apk.sh \
     android/app/build/outputs/bundle/release/app-release.aab \
-    artifacts/KartPad-v0.4.12-android.1-arm64.apk
+    artifacts/KartPad-v0.4.10-android.1-arm64.apk
 ```
 
 The keystore and key must use the same password for this simple PKCS12 flow.

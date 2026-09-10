@@ -128,20 +128,3 @@ phone/app versions, and whether they want sideways phone steering or a bridged
 physical Wii Remote/Nunchuk, before choosing the first compatibility target.
 Keep this deferred until separately prioritized; listing it here does not
 commit it to the next build or establish hardware support.
-
-## Android custom Vulkan driver comparison
-
-**Status:** Investigation proposal from [#104](https://github.com/chrissotraidis/kartpad/issues/104); no implementation or release commitment.
-
-[Mesa Turnip](https://docs.mesa3d.org/drivers/freedreno.html) is an alternative
-Vulkan implementation for Adreno. KartPad currently uses its existing Vulkan
-loading path and offers no custom-driver import/selection. Downloading a driver
-ZIP does not change the driver used by KartPad.
-
-A bounded pilot would first establish compatibility with the exact Android
-device, loader and pinned Dawn build, then compare the same failing scene with
-the system driver and the alternative. Preserve a working system-driver
-fallback. Such a comparison may isolate vendor-dependent behavior; it would
-not alone prove whether the original defect belongs to KartPad or the driver.
-Do not substitute this proposal for the ongoing actual-draw investigation or
-ask reporters to modify their system drivers.

@@ -43,9 +43,9 @@
 +
 +set(MKW_KARTPAD_MINIZIP_SOURCE_DIR "" CACHE PATH
 +    "Pinned minizip-ng source used by KartPad's tvOS Retro Rewind installer")
-+set(KARTPAD_TVOS_MARKETING_VERSION "0.4.11" CACHE STRING
++set(KARTPAD_TVOS_MARKETING_VERSION "0.4.9" CACHE STRING
 +    "KartPad tvOS marketing version")
-+set(KARTPAD_TVOS_BUILD_NUMBER "9" CACHE STRING
++set(KARTPAD_TVOS_BUILD_NUMBER "8" CACHE STRING
 +    "KartPad tvOS bundle build number")
 +set(KARTPAD_TVOS_BUNDLE_IDENTIFIER "dev.kartpad.tv" CACHE STRING
 +    "KartPad tvOS product bundle identifier")

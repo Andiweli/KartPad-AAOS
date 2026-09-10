@@ -4,7 +4,6 @@
 #include <cstdio>
 
 extern "C" int KartPadAndroidCaptureScalarFlags() noexcept;
-extern "C" void KartPadAndroidClearScalarFlags() noexcept;
 __attribute__((noinline)) int Baseline() noexcept {
   std::uint64_t value;
   asm volatile("mrs %0, fpsr" : "=r"(value) :: "memory");
@@ -19,15 +18,6 @@ int main() {
   for (unsigned bits = 0; bits < 256; ++bits) {
     for (std::uint64_t qc : {0ULL, 1ULL << 27}) {
       const std::uint64_t before = (bits & FE_ALL_EXCEPT) | qc;
-      asm volatile("msr fpsr, %0" :: "r"(before) : "memory");
-      KartPadAndroidClearScalarFlags();
-      std::uint64_t clearAfter;
-      asm volatile("mrs %0, fpsr" : "=r"(clearAfter) :: "memory");
-      if (clearAfter != qc) {
-        std::fesetenv(&saved);
-        std::puts("FAIL clear FPSR exception/QC preservation");
-        return 1;
-      }
       asm volatile("msr fpsr, %0" :: "r"(before) : "memory");
       const int flags = KartPadAndroidCaptureScalarFlags();
       std::uint64_t after;

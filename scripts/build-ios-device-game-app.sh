@@ -99,13 +99,9 @@ cmake -S "${runtime_source}" -B "${xcode_build}" -G Xcode \
   -DMKW_KARTPAD_DISCIO_SOURCE_DIR="${discio_source}" \
   -DMKW_KARTPAD_DISCIO_BUILD_DIR="${discio_build}" \
   -DMKW_TRANSLATED_COMPILE_JOBS=2
-python3 "${repo_root}/scripts/write-build-provenance.py" --repo "${repo_root}" \
-  --runtime "${runtime_source}" --translation "${translation_root}" \
-  --output "${xcode_build}/kartpad-build.json"
 cmake --build "${xcode_build}" --config Release --target "${product_target}" -- \
   -sdk iphoneos CODE_SIGNING_ALLOWED=NO
 
-cp "${xcode_build}/kartpad-build.json" "${app}/kartpad-build.json"
 "${repo_root}/scripts/audit-ios-game-app.sh" "${app}" IOS
 if rg -a -F -q "${repo_root}" "${app}/KartPad"; then
   echo "ERROR: physical-iOS app exposes its private KartPad build path" >&2

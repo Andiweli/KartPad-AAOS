@@ -15,6 +15,7 @@ import android.system.Os
 import android.text.TextUtils
 import android.util.Log
 import android.util.TypedValue
+import android.view.KeyEvent
 import android.view.Gravity
 import android.view.InputDevice
 import android.view.View
@@ -63,8 +64,6 @@ class KartPadActivity : SDLActivity() {
     private var menuSafeInsetBottom = 0
     private var menuSafeInsetsInitialized = false
     private var runtimeProfile = "base"
-    private var saveDocumentProfile: String? = null
-    private var saveRestoreStartupError: String? = null
     private lateinit var inputManager: InputManager
     private lateinit var motionSteering: KartPadMotionSteering
     private var inputListenerRegistered = false
@@ -79,7 +78,6 @@ class KartPadActivity : SDLActivity() {
     override fun createSDLSurface(context: Context): SDLSurface = KartPadSurface(context)
 
     override fun loadLibraries() {
-        saveRestoreStartupError?.let { throw IllegalStateException(it) }
         super.loadLibraries()
         // SDL catches library/startup failures and does not start the guest.
         // Resume never runs this hook, so pending edits apply only at cold launch.
@@ -92,15 +90,13 @@ class KartPadActivity : SDLActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        saveDocumentProfile = savedInstanceState?.getString("save_document_profile")
-            ?.takeIf { it in KartPadSaveStorage.profiles }
         Os.setenv("KARTPAD_ANDROID_FILES_DIR", filesDir.absolutePath, true)
         Os.setenv("KARTPAD_ANDROID_CACHE_DIR", cacheDir.absolutePath, true)
-        KartPadRendererDiagnostics.configure(this)
+        initializePerformanceDefaults()
         if (BuildConfig.GAME_RUNTIME) {
             RetroRewindInstallStorage.recover(filesDir)
             if (!identityStartupChecked) {
-                saveRestoreStartupError = KartPadSaveStorage.applyPending(filesDir)
+                KartPadSaveStorage.applyPending(filesDir)?.let { error -> Log.e(TAG, error) }
                 KartPadMiiStorage.applyPending(filesDir)?.let { error -> Log.e(TAG, error) }
             }
             KartPadRuntimeResources.install(this)
@@ -111,7 +107,6 @@ class KartPadActivity : SDLActivity() {
             configureDebugStateTrace()
         }
         super.onCreate(savedInstanceState)
-        KartPadExitDiagnostics.mark(this, runtimeProfile)
         if (mBrokenLibraries) return
         nativeEnableActivityRecreation()
         inputManager = getSystemService(InputManager::class.java)
@@ -328,15 +323,26 @@ class KartPadActivity : SDLActivity() {
         Log.i(TAG, "A0 SDLActivity shell created")
     }
 
+    // R3 opens the host menu without stealing Start (the in-game pause button).
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (!mBrokenLibraries && ::menuButton.isInitialized &&
+            (event.keyCode == KeyEvent.KEYCODE_BUTTON_THUMBR || event.keyCode == KeyEvent.KEYCODE_BACK)) {
+            if (event.action == KeyEvent.ACTION_UP) showKartPadMenu()
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onResume() {
         super.onResume()
         if (mBrokenLibraries) return
+        if (!AaosWindow.isAutomotive(this)) SDLActivity.setWindowStyle(true)
         if (::inputManager.isInitialized && !inputListenerRegistered) {
             inputManager.registerInputDeviceListener(inputDeviceListener, null)
             inputListenerRegistered = true
         }
         refreshControllerHandoff()
-        if (::motionSteering.isInitialized) motionSteering.start()
+        if (::motionSteering.isInitialized && !AaosWindow.isAutomotive(this)) motionSteering.start()
         if (BuildConfig.GAME_RUNTIME) KartPadRuntimeHealth.start(this, runtimeProfile)
     }
 
@@ -365,7 +371,6 @@ class KartPadActivity : SDLActivity() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putString("save_document_profile", saveDocumentProfile)
         if (debugActivityRecreateRequested) {
             outState.putBoolean(DEBUG_STATE_ACTIVITY_RECREATE, true)
         }
@@ -378,21 +383,8 @@ class KartPadActivity : SDLActivity() {
             verifyDebugLifecycleClear("focus-loss")
         }
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) hideGameSystemBars()
-    }
-
-    @Suppress("DEPRECATION")
-    private fun hideGameSystemBars() {
-        if (Build.VERSION.SDK_INT >= 30) {
-            window.insetsController?.let { controller ->
-                controller.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                controller.hide(WindowInsets.Type.systemBars())
-            }
-        } else {
-            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-                View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        if (hasFocus && !mBrokenLibraries && !AaosWindow.isAutomotive(this)) {
+            SDLActivity.setWindowStyle(true)
         }
     }
 
@@ -422,21 +414,35 @@ class KartPadActivity : SDLActivity() {
         if (controllerCount > 0) kartPadOverlay.clearTouchInput()
         kartPadOverlay.setControllerConnected(controllerCount > 0)
         kartPadOverlay.setHiddenForController(
-            controllerCount > 0 && KartPadTouchSettings.hideOnController(this),
+            AaosWindow.isAutomotive(this) ||
+                (controllerCount > 0 && KartPadTouchSettings.hideOnController(this)),
         )
         Log.i(TAG, "A4 controller handoff count=$controllerCount")
     }
 
     private fun addMenuButton() {
-        menuButton = Button(this).apply {
-            text = "⋯"
-            textSize = 24f
-            setTextColor(Color.WHITE)
+        menuButton = object : Button(this) {
+            private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+
+            override fun onDraw(canvas: android.graphics.Canvas) {
+                super.onDraw(canvas)
+                // Draw around the circle's actual center, independent of font baselines.
+                val centerX = width / 2f
+                val centerY = height / 2f
+                val density = resources.displayMetrics.density
+                for (offset in -1..1) {
+                    canvas.drawCircle(centerX + offset * 7f * density, centerY,
+                        2f * density, dotPaint)
+                }
+            }
+        }.apply {
+            text = ""
+            alpha = 0.25f
             contentDescription = "Menu"
             gravity = Gravity.CENTER
             minWidth = 0
             minHeight = 0
-            setPadding(0, 0, 0, dp(6))
+            setPadding(0, 0, 0, 0)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Color.argb(190, 20, 20, 20))
@@ -447,7 +453,7 @@ class KartPadActivity : SDLActivity() {
         val params = RelativeLayout.LayoutParams(dp(44), dp(44)).apply {
             addRule(RelativeLayout.ALIGN_PARENT_END)
             addRule(RelativeLayout.ALIGN_PARENT_TOP)
-            setMargins(0, dp(8), dp(12), 0)
+            setMargins(0, dp(12), dp(12), 0)
         }
         mLayout.addView(menuButton, params)
         menuButton.setOnApplyWindowInsetsListener { _, insets ->
@@ -462,32 +468,26 @@ class KartPadActivity : SDLActivity() {
         val priorTop = menuSafeInsetTop
         val priorEnd = menuSafeInsetEnd
         val priorBottom = menuSafeInsetBottom
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val safe = insets.getInsetsIgnoringVisibility(
-                WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout(),
-            )
+        if (AaosWindow.isAutomotive(this)) {
+            // AaosWindow already fits the entire SDL layout to the vehicle safe area.
+            // Do not add the same vehicle insets again to this child.
+            menuSafeInsetTop = 0
+            menuSafeInsetEnd = 0
+            menuSafeInsetBottom = 0
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Immersive Android: hidden status/navigation bars reserve no space.
+            // Retain real cutout protection; transient bars must not move this button.
+            val safe = insets.getInsets(WindowInsets.Type.displayCutout())
             menuSafeInsetTop = safe.top
             menuSafeInsetEnd = safe.right
             menuSafeInsetBottom = safe.bottom
         } else {
-            menuSafeInsetTop = maxOf(
-                insets.stableInsetTop,
-                insets.systemWindowInsetTop,
-                insets.displayCutout?.safeInsetTop ?: 0,
-            )
-            menuSafeInsetEnd = maxOf(
-                insets.stableInsetRight,
-                insets.systemWindowInsetRight,
-                insets.displayCutout?.safeInsetRight ?: 0,
-            )
-            menuSafeInsetBottom = maxOf(
-                insets.stableInsetBottom,
-                insets.systemWindowInsetBottom,
-                insets.displayCutout?.safeInsetBottom ?: 0,
-            )
+            menuSafeInsetTop = insets.displayCutout?.safeInsetTop ?: 0
+            menuSafeInsetEnd = insets.displayCutout?.safeInsetRight ?: 0
+            menuSafeInsetBottom = insets.displayCutout?.safeInsetBottom ?: 0
         }
         (menuButton.layoutParams as? RelativeLayout.LayoutParams)?.let { params ->
-            params.topMargin = menuSafeInsetTop + dp(8)
+            params.topMargin = menuSafeInsetTop + dp(12)
             params.marginEnd = menuSafeInsetEnd + dp(12)
             menuButton.layoutParams = params
         }
@@ -529,6 +529,14 @@ class KartPadActivity : SDLActivity() {
                 ) {
                     val show = !KartPadTouchSettings.showFps(this)
                     setShowFps(show)
+                    showKartPadMenu()
+                },
+                MenuRow(
+                    "Show Shader Information",
+                    R.drawable.ic_kartpad_display,
+                    checked = shaderInformationEnabled(),
+                ) {
+                    writePerformanceFlag("show-shader-information.txt", !shaderInformationEnabled())
                     showKartPadMenu()
                 },
                 MenuRow("Controls", R.drawable.ic_kartpad_gamecontroller, submenu = true) {
@@ -574,6 +582,41 @@ class KartPadActivity : SDLActivity() {
         showBack = true,
     )
 
+    private fun File.readTextOrNull(): String? = runCatching { readText().trim() }.getOrNull()
+
+    private fun fastCoresEnabled(): Boolean =
+        File(filesDir, "KartPad/cpu-fast-mode.txt").readTextOrNull() != "0"
+
+    private fun shaderInformationEnabled(): Boolean =
+        File(filesDir, "KartPad/show-shader-information.txt").readTextOrNull() == "1"
+
+    private fun writePerformanceFlag(name: String, enabled: Boolean): Boolean = runCatching {
+        val target = File(filesDir, "KartPad/$name")
+        check(target.parentFile!!.isDirectory || target.parentFile!!.mkdirs())
+        val atomic = android.util.AtomicFile(target)
+        val stream = atomic.startWrite()
+        try {
+            stream.write((if (enabled) "1" else "0").toByteArray(Charsets.UTF_8))
+            atomic.finishWrite(stream)
+        } catch (error: Throwable) {
+            atomic.failWrite(stream)
+            throw error
+        }
+    }.onFailure {
+        Log.e(TAG, "Unable to save performance setting: $name", it)
+        android.widget.Toast.makeText(this, "Could not save setting", android.widget.Toast.LENGTH_SHORT).show()
+    }.isSuccess
+
+    private fun initializePerformanceDefaults() {
+        val prefs = getSharedPreferences("kartpad_performance_defaults", MODE_PRIVATE)
+        // One-time migration from the experimental opt-in. Later OFF choices persist.
+        if (!prefs.getBoolean("fast_cores_v2_initialized", false)) {
+            if (writePerformanceFlag("cpu-fast-mode.txt", true)) {
+                prefs.edit().putBoolean("fast_cores_v2_initialized", true).apply()
+            }
+        }
+    }
+
     private fun showDisplayMenu() = showKartPadMenuPage(
         "Display",
         listOf(
@@ -582,6 +625,30 @@ class KartPadActivity : SDLActivity() {
             },
             MenuRow("Render Resolution…", R.drawable.ic_kartpad_display) {
                 closeKartPadMenu(::showResolutionSettings)
+            },
+            MenuRow("Prefer CPU Fast Cores: " +
+                (if (fastCoresEnabled()) "ON" else "OFF"),
+                R.drawable.ic_kartpad_display) {
+                closeKartPadMenu {
+                    val enable = !fastCoresEnabled()
+                    if (writePerformanceFlag("cpu-fast-mode.txt", enable)) {
+                        android.widget.Toast.makeText(this,
+                            "Prefer CPU Fast Cores: " + (if (enable) "ON" else "OFF"),
+                            android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+            },
+            MenuRow("Export Performance Report…", R.drawable.ic_kartpad_display) {
+                closeKartPadMenu {
+                    val minimum = minimumRenderScale()
+                    startActivity(Intent(this, KartPadPerformanceExportActivity::class.java).apply {
+                        putExtra("scale", KartPadTouchSettings.resolutionScale(this@KartPadActivity).coerceAtLeast(minimum))
+                        putExtra("minimum", minimum)
+                        putExtra("width", window.decorView.width)
+                        putExtra("height", window.decorView.height)
+                        putExtra("session", UUID.randomUUID().toString())
+                    })
+                }
             },
         ),
         showBack = true,
@@ -644,7 +711,10 @@ class KartPadActivity : SDLActivity() {
             setPadding(dp(18), 0, dp(18), 0)
             isClickable = showBack
             isFocusable = showBack
-            if (showBack) setOnClickListener { showKartPadMenu() }
+            if (showBack) {
+                setOnClickListener { showKartPadMenu() }
+                setOnKeyListener { view, code, event -> handleMenuGamepadKey(view, code, event) }
+            }
         }
         card.addView(heading, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -675,16 +745,26 @@ class KartPadActivity : SDLActivity() {
         // It intentionally covers its trigger while open, like an anchored system menu.
         val popupTop = menuSafeInsetTop + dp(8)
         val popupEnd = menuSafeInsetEnd + dp(12)
-        val availableHeight = (
-            resources.displayMetrics.heightPixels - popupTop - menuSafeInsetBottom - dp(16)
-        ).coerceAtLeast(dp(88))
+        val automotive = AaosWindow.isAutomotive(this)
+        val availableHeight = if (automotive) {
+            (mLayout.height - menuButton.top - dp(8)).coerceAtLeast(1)
+        } else {
+            (resources.displayMetrics.heightPixels - popupTop - menuSafeInsetBottom - dp(16))
+                .coerceAtLeast(dp(88))
+        }
+        val popupWidth = if (automotive) minOf(dp(320), (mLayout.width - dp(24)).coerceAtLeast(1)) else dp(320)
         val desiredHeight = dp(38) + rowHeights.sum() + (rows.size - 1).coerceAtLeast(0)
-        kartPadMenu = PopupWindow(card, dp(320), minOf(availableHeight, desiredHeight), true).apply {
+        kartPadMenu = PopupWindow(card, popupWidth, minOf(availableHeight, desiredHeight), true).apply {
             isOutsideTouchable = true
             elevation = dp(12).toFloat()
             setBackgroundDrawable(GradientDrawable().apply { setColor(Color.TRANSPARENT) })
             setOnDismissListener { if (kartPadMenu === this) kartPadMenu = null }
-            showAtLocation(mLayout, Gravity.TOP or Gravity.END, popupEnd, popupTop)
+            if (automotive) {
+                showAsDropDown(menuButton, menuButton.width - popupWidth, -menuButton.height, Gravity.START)
+            } else {
+                showAtLocation(mLayout, Gravity.TOP or Gravity.END, popupEnd, popupTop)
+            }
+            list.post { list.getChildAt(0)?.requestFocus() }
         }
     }
 
@@ -700,6 +780,8 @@ class KartPadActivity : SDLActivity() {
                 intArrayOf(android.R.attr.state_pressed),
                 GradientDrawable().apply { setColor(Color.argb(42, 60, 60, 67)) },
             )
+            addState(intArrayOf(android.R.attr.state_focused),
+                GradientDrawable().apply { setColor(Color.argb(70, 35, 105, 220)) })
             addState(intArrayOf(), GradientDrawable().apply { setColor(Color.TRANSPARENT) })
         }
         addView(ImageView(this@KartPadActivity).apply {
@@ -724,6 +806,16 @@ class KartPadActivity : SDLActivity() {
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }, LinearLayout.LayoutParams(dp(24), ViewGroup.LayoutParams.MATCH_PARENT))
         setOnClickListener { row.action() }
+        setOnKeyListener { view, code, event -> handleMenuGamepadKey(view, code, event) }
+    }
+
+    private fun handleMenuGamepadKey(view: View, code: Int, event: KeyEvent): Boolean {
+        if (code != KeyEvent.KEYCODE_BUTTON_A && code != KeyEvent.KEYCODE_BUTTON_B &&
+            code != KeyEvent.KEYCODE_BUTTON_THUMBR) return false
+        if (event.action == KeyEvent.ACTION_UP) {
+            if (code == KeyEvent.KEYCODE_BUTTON_A) view.performClick() else kartPadMenu?.dismiss()
+        }
+        return true
     }
 
     private fun kartPadMenuRowHeight(row: MenuRow): Int {
@@ -781,7 +873,7 @@ class KartPadActivity : SDLActivity() {
         nativeApplyDisplaySettings(
             KartPadTouchSettings.showFps(this),
             KartPadTouchSettings.aspectMode(this),
-            KartPadTouchSettings.resolutionScale(this),
+            KartPadTouchSettings.resolutionScale(this).coerceAtLeast(minimumRenderScale()),
         )
     }
 
@@ -802,9 +894,27 @@ class KartPadActivity : SDLActivity() {
             .show()
     }
 
+    private external fun nativeMinimumRenderScale(): Float
+
+    private fun minimumRenderScale(): Float = try {
+        val value = nativeMinimumRenderScale()
+        if (value == 0.5f) value else 1f
+    } catch (_: UnsatisfiedLinkError) { 1f }
+
+    private fun renderScales(): FloatArray = if (minimumRenderScale() < 1f) {
+        floatArrayOf(0.5f, 0.75f, 1f, 2f, 3f, 4f)
+    } else floatArrayOf(1f, 2f, 3f, 4f)
+
+    private fun renderScaleLabel(scale: Float): String = when (scale) {
+        0.5f -> "0.5×"
+        0.75f -> "0.75×"
+        1f -> "1× (Native)"
+        else -> "${scale.toInt()}×"
+    }
+
     private fun showResolutionSettings() {
-        val labels = arrayOf("1× (Native)", "2×", "3×", "4×")
-        val scales = floatArrayOf(1f, 2f, 3f, 4f)
+        val scales = renderScales()
+        val labels = scales.map(::renderScaleLabel).toTypedArray()
         val selected = scales.indexOfFirst {
             kotlin.math.abs(it - KartPadTouchSettings.resolutionScale(this)) < 0.01f
         }.coerceAtLeast(0)
@@ -1253,43 +1363,28 @@ class KartPadActivity : SDLActivity() {
 
     private fun showSaveManager() {
         kartPadOverlay.clearTouchInput()
-        AlertDialog.Builder(this)
-            .setTitle("Choose Save Profile")
-            .setItems(KartPadSaveStorage.profiles.map { KartPadSaveStorage.title(it) }.toTypedArray()) { _, index ->
-                showSaveManager(KartPadSaveStorage.profiles[index])
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun showSaveManager(profile: String) {
-        val title = KartPadSaveStorage.title(profile)
-        val validSave = runCatching { KartPadSaveStorage.readActive(filesDir, profile) }.isSuccess
-        val pending = KartPadSaveStorage.hasPending(filesDir, profile)
+        val validSave = runCatching { KartPadSaveStorage.readActive(filesDir) }.isSuccess
+        val pending = KartPadSaveStorage.hasPending(filesDir)
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(4), dp(24), dp(8))
         }
         lateinit var dialog: AlertDialog
         content.addView(settingsLabel(when {
-            KartPadRatingStorage.hasPending(filesDir) -> "A rating restore is staged. Restart before making another save or rating change."
-            pending -> "A validated $title restore is staged for the next game restart."
-            validSave -> "A validated $title save is available for backup."
-            else -> "No valid $title save is available for export. You can restore a compatible backup here."
+            pending -> "A validated save restore is staged for the next game restart."
+            validSave -> "A validated Mario Kart Wii save is available for backup."
+            else -> "No initialized Mario Kart Wii save exists yet. Create a license in the game first."
         }))
-        content.addView(settingsLabel("Raw save actions only affect $title. Choose Separate Save only if that option is enabled in Retro Rewind. Saves do not include Miis or console identity."))
         content.addView(Button(this).apply {
             text = "Export Save Backup…"
-            contentDescription = "Export $title save backup"
+            contentDescription = "Export Mario Kart Wii save backup"
             isEnabled = validSave
             setOnClickListener {
-                saveDocumentProfile = profile
-                dialog.dismiss()
                 startActivityForResult(
                     Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                         addCategory(Intent.CATEGORY_OPENABLE)
                         type = "application/octet-stream"
-                        putExtra(Intent.EXTRA_TITLE, "KartPad-$profile-rksys.dat")
+                        putExtra(Intent.EXTRA_TITLE, "KartPad-RMCP01-rksys.dat")
                     },
                     REQUEST_EXPORT_SAVE,
                 )
@@ -1297,43 +1392,15 @@ class KartPadActivity : SDLActivity() {
         })
         content.addView(Button(this).apply {
             text = "Restore Save Backup…"
-            contentDescription = "Restore $title save backup"
-            isEnabled = !pending && !KartPadRatingStorage.hasPending(filesDir)
+            contentDescription = "Restore Mario Kart Wii save backup"
             setOnClickListener {
-                AlertDialog.Builder(this@KartPadActivity)
-                    .setTitle("Restore $title?")
-                    .setMessage("Select a compatible raw rksys.dat backup for $title. After validation, it will replace this profile's save on restart, with a backup of existing progress. Other profiles remain unchanged.")
-                    .setNegativeButton("Cancel", null)
-                    .setPositiveButton("Choose Backup…") { _, _ ->
-                        saveDocumentProfile = profile
-                        dialog.dismiss()
-                        startActivityForResult(
-                            Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                                addCategory(Intent.CATEGORY_OPENABLE)
-                                type = "application/octet-stream"
-                            },
-                            REQUEST_IMPORT_SAVE,
-                        )
-                    }
-                    .show()
-            }
-        })
-        if (profile != "original") content.addView(Button(this).apply {
-            text = "Restore Retro Ratings…"
-            isEnabled = validSave && !KartPadSaveStorage.hasPending(filesDir)
-            setOnClickListener {
-                AlertDialog.Builder(this@KartPadActivity)
-                    .setTitle("Restore Ratings for $title?")
-                    .setMessage("Restore your raw save and restart first. Choose its matching RRRating.pul from your PC backup. Ratings for this save's online profiles will be applied on restart with a backup; unrelated ratings stay unchanged. Retro save modes share ratings for the same online ID. This does not import Miis or synchronize server ratings. Verify offline before going online.")
-                    .setNegativeButton("Cancel", null)
-                    .setPositiveButton("Choose Ratings…") { _, _ ->
-                        saveDocumentProfile = profile
-                        dialog.dismiss()
-                        startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                            addCategory(Intent.CATEGORY_OPENABLE)
-                            type = "application/octet-stream"
-                        }, REQUEST_IMPORT_RATINGS)
-                    }.show()
+                startActivityForResult(
+                    Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "application/octet-stream"
+                    },
+                    REQUEST_IMPORT_SAVE,
+                )
             }
         })
         content.addView(Button(this).apply {
@@ -1341,7 +1408,7 @@ class KartPadActivity : SDLActivity() {
             setOnClickListener { dialog.dismiss() }
         })
         dialog = AlertDialog.Builder(this)
-            .setTitle("Manage Saves • $title")
+            .setTitle("Manage Saves")
             .setView(ScrollView(this).apply { addView(content) })
             .create()
         dialog.show()
@@ -1405,53 +1472,14 @@ class KartPadActivity : SDLActivity() {
                 .show()
             return
         }
-        val saveProfile = if (requestCode == REQUEST_EXPORT_SAVE || requestCode == REQUEST_IMPORT_SAVE || requestCode == REQUEST_IMPORT_RATINGS) {
-            val selected = saveDocumentProfile
-            saveDocumentProfile = null
-            if (resultCode != RESULT_OK) return
-            if (selected !in KartPadSaveStorage.profiles) {
-                showParityBoundary("Choose Save Profile Again", "The save selection could not be recovered. Open Manage Saves and choose the intended profile again. No save was restored.")
-                return
-            }
-            selected
-        } else null
-        if (requestCode == REQUEST_IMPORT_RATINGS && resultCode == RESULT_OK) {
-            val uri = data?.data ?: return
-            runCatching {
-                val bytes = contentResolver.openInputStream(uri)?.use { stream ->
-                    val buffer = ByteArray(KartPadRatingCompanion.FILE_BYTES + 1)
-                    var count = 0
-                    while (count < buffer.size) {
-                        val read = stream.read(buffer, count, buffer.size - count)
-                        if (read < 0) break
-                        check(read > 0) { "The rating file could not be read." }
-                        count += read
-                    }
-                    require(count == KartPadRatingCompanion.FILE_BYTES) { "Unsupported rating file length." }
-                    buffer.copyOf(count)
-                } ?: error("The rating file could not be opened.")
-                KartPadRatingStorage.stage(filesDir, requireNotNull(saveProfile), bytes)
-            }.onSuccess {
-                AlertDialog.Builder(this)
-                    .setTitle("Rating Restore Scheduled")
-                    .setMessage("Matched ratings for ${KartPadSaveStorage.title(requireNotNull(saveProfile))} will be restored before gameplay starts, with a backup. Verify offline before going online. Miis are unchanged.")
-                    .setPositiveButton("Restart Now") { _, _ -> restartToGameSelector() }
-                    .setNegativeButton("Later", null).show()
-            }.onFailure { error ->
-                showParityBoundary("Rating Restore Failed", if (error is IllegalArgumentException)
-                    error.message ?: "The rating file could not be validated."
-                    else "The rating restore could not be staged.")
-            }
-            return
-        }
         if (requestCode == REQUEST_EXPORT_SAVE && resultCode == RESULT_OK) {
             val uri = data?.data ?: return
             runCatching {
-                val save = KartPadSaveStorage.readActive(filesDir, requireNotNull(saveProfile))
+                val save = KartPadSaveStorage.readActive(filesDir)
                 contentResolver.openOutputStream(uri, "wt")
                     ?.use { it.write(save) } ?: error("The selected destination could not be opened.")
             }.onSuccess {
-                showParityBoundary("Save Backup Exported", "The validated ${KartPadSaveStorage.title(requireNotNull(saveProfile))} save backup was exported.")
+                showParityBoundary("Save Backup Exported", "The validated RKSYS save backup was exported.")
             }.onFailure {
                 showParityBoundary("Save Export Failed", "The save backup could not be exported.")
             }
@@ -1475,11 +1503,11 @@ class KartPadActivity : SDLActivity() {
                     }
                     buffer.copyOf(count)
                 }
-                KartPadSaveStorage.writePending(filesDir, save, requireNotNull(saveProfile))
+                KartPadSaveStorage.writePending(filesDir, save)
             }.onSuccess {
                 AlertDialog.Builder(this)
                     .setTitle("Save Restore Scheduled")
-                    .setMessage("The validated ${KartPadSaveStorage.title(requireNotNull(saveProfile))} save will replace only that profile after restarting. KartPad will retain a backup of its current save automatically.")
+                    .setMessage("The validated save will replace the current save after restarting. KartPad will retain a backup of the current save automatically.")
                     .setPositiveButton("Restart Now") { _, _ -> restartToGameSelector() }
                     .setNegativeButton("Later", null)
                     .show()
@@ -1585,17 +1613,6 @@ class KartPadActivity : SDLActivity() {
         fields.addView(frequency)
 
         fun reportId() = "KP-${UUID.randomUUID().toString().take(8).uppercase()}"
-        fun performanceReport() = buildString {
-            val aspect = when (KartPadTouchSettings.aspectMode(this@KartPadActivity)) {
-                0 -> "Original 4:3"
-                1 -> "16:9 (Experimental)"
-                2 -> "Fill Screen (Experimental)"
-                else -> "Unknown"
-            }
-            appendLine("Configured render resolution: ${KartPadTouchSettings.resolutionScale(this@KartPadActivity)}x")
-            appendLine("Configured aspect: $aspect")
-            append("Active renderer validation: ${if (KartPadRendererDiagnostics.active) "On" else "Off"}")
-        }
         fun diagnosticReport(id: String) = buildString {
             appendLine("KartPad Android diagnostic report")
             appendLine("Report ID: $id")
@@ -1604,9 +1621,6 @@ class KartPadActivity : SDLActivity() {
             appendLine("Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
             appendLine("Runtime profile: $runtimeProfile")
             appendLine("Retro Rewind release: ${RetroRewindRelease.VERSION}")
-            appendLine(performanceReport())
-            appendLine("Technical context:")
-            appendLine(KartPadReportContext.snapshot(this@KartPadActivity, runtimeProfile, KartPadRendererDiagnostics.active).toString(2))
             appendLine()
             appendLine("What went wrong:")
             appendLine(problem.text.toString().trim().ifBlank { "Not provided" })
@@ -1640,14 +1654,10 @@ class KartPadActivity : SDLActivity() {
                     .appendQueryParameter(
                         "revision", "${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
                     )
-                    .appendQueryParameter("platform", "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}; Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})")
-                    .appendQueryParameter("performance-profile", performanceReport())
+                    .appendQueryParameter("platform", "Android ${android.os.Build.VERSION.RELEASE}")
+                    .appendQueryParameter("performance-profile", runtimeProfile)
                     .appendQueryParameter("summary", problem.text.toString().trim())
-                    .appendQueryParameter("context", buildString {
-                        appendLine("Runtime profile: $runtimeProfile")
-                        if (runtimeProfile == "retro_rewind") appendLine("Retro Rewind release: ${RetroRewindRelease.VERSION}")
-                        append(area.text.toString().trim())
-                    })
+                    .appendQueryParameter("context", area.text.toString().trim())
                     .appendQueryParameter("frequency", frequency.text.toString().trim())
                     .build()
                 startActivity(Intent(Intent.ACTION_VIEW, url))
@@ -1675,9 +1685,9 @@ class KartPadActivity : SDLActivity() {
         }
         val opacityLabel = settingsLabel("")
         val renderLabel = settingsLabel("Render")
-        val renderScales = floatArrayOf(1f, 2f, 3f, 4f)
+        val renderScales = renderScales()
         val render = RadioGroup(this).apply {
-            orientation = RadioGroup.HORIZONTAL
+            orientation = RadioGroup.VERTICAL
             gravity = Gravity.CENTER_VERTICAL
             contentDescription = "Render resolution"
         }
@@ -1685,7 +1695,7 @@ class KartPadActivity : SDLActivity() {
         renderScales.forEach { scale ->
             render.addView(RadioButton(this).apply {
                 id = View.generateViewId()
-                text = if (scale == 1f) "1×" else "${scale.toInt()}×"
+                text = if (scale == 1f) "1×" else renderScaleLabel(scale)
                 setTextColor(Color.WHITE)
                 tag = scale
                 isChecked = kotlin.math.abs(scale - currentRenderScale) < 0.01f
@@ -2263,7 +2273,6 @@ class KartPadActivity : SDLActivity() {
         private const val REQUEST_MANAGE_GAME_DATA = 4_302
         private const val REQUEST_EXPORT_SAVE = 4_303
         private const val REQUEST_IMPORT_SAVE = 4_304
-        private const val REQUEST_IMPORT_RATINGS = 4_305
         private const val MII_FILE_BYTES = 74
         const val EXTRA_RUNTIME_PROFILE = "dev.kartpad.android.RUNTIME_PROFILE"
         private const val TAG = "KartPadFixture"

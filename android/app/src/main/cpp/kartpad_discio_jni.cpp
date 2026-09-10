@@ -1,6 +1,7 @@
 #include <jni.h>
 
 #include <algorithm>
+#include <atomic>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -15,32 +16,6 @@ namespace {
 
 jstring Error(JNIEnv* env, const char* message) {
   return env->NewStringUTF(message);
-}
-
-// Dolphin's ExportDirectory logs individual failures but returns void and keeps
-// visiting entries. A progress count therefore cannot establish a complete copy.
-bool ExportCheckedDirectory(const DiscIO::Volume& volume,
-                            const DiscIO::Partition& partition,
-                            const DiscIO::FileInfo& directory,
-                            const std::filesystem::path& destination,
-                            unsigned depth = 0) {
-  if (depth > 64) return false;
-  std::error_code error;
-  std::filesystem::create_directories(destination, error);
-  if (error) return false;
-  for (const auto& entry : directory) {
-    const std::filesystem::path name(entry.GetName());
-    if (name.empty() || name == "." || name == ".." || name != name.filename())
-      return false;
-    const auto path = destination / name;
-    if (entry.IsDirectory()) {
-      if (!ExportCheckedDirectory(volume, partition, entry, path, depth + 1))
-        return false;
-    } else if (!DiscIO::ExportFile(volume, partition, &entry, path.string())) {
-      return false;
-    }
-  }
-  return true;
 }
 
 }  // namespace
@@ -73,34 +48,27 @@ Java_dev_kartpad_android_KartPadDiscImageImporter_nativeExtract(
           env, "KartPad currently supports RMCP01 (PAL), revision 0 only.");
     }
 
-    constexpr u64 reserve = 64 * 1024 * 1024;
-    const auto& root = filesystem->GetRoot();
-    const u64 entries = root.GetTotalChildren();
-    const u64 bytes = root.GetTotalSize();
-    if (entries > 100'000 || bytes > 8ULL * 1024 * 1024 * 1024)
-      return Error(env, "The disc exceeds KartPad's import limit.");
     std::error_code filesystem_error;
-    const auto space = std::filesystem::space(destination, filesystem_error);
-    if (filesystem_error)
-      return Error(env, "Available game-data storage could not be checked.");
-    // Keep room for system files, allocation overhead, and atomic configuration.
-    const u64 required = bytes + reserve + entries * 4096;
-    if (space.available < required) {
-      const auto message = "Not enough free storage to import this disc. Free at least " +
-          std::to_string((required - space.available + 1024 * 1024 - 1) / (1024 * 1024)) +
-          " MiB more and try again. Your existing game data and saves are unchanged.";
-      return Error(env, message.c_str());
-    }
     std::filesystem::create_directories(destination / "files", filesystem_error);
     if (filesystem_error ||
         !DiscIO::ExportSystemData(*volume, partition, destination.string())) {
       return Error(env, "System-data extraction failed.");
     }
 
-    if (!ExportCheckedDirectory(*volume, partition, root, destination / "files") ||
+    const u64 total =
+        std::max<u64>(1, filesystem->GetRoot().GetTotalChildren());
+    std::atomic<u64> completed{0};
+    DiscIO::ExportDirectory(
+        *volume, partition, filesystem->GetRoot(), true, "",
+        (destination / "files").string(),
+        [&completed](const std::string&) {
+          ++completed;
+          return false;
+        });
+    if (completed.load() != total ||
         !std::filesystem::is_regular_file(
             destination / "files" / "rel" / "StaticR.rel")) {
-      return Error(env, "Game-file extraction failed. Check free storage and the selected disc image, then try again. Existing game data and saves are unchanged.");
+      return Error(env, "Game-file extraction was incomplete.");
     }
     return nullptr;
   } catch (...) {

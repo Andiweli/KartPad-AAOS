@@ -6,6 +6,11 @@ import org.libsdl.app.SDLSurface
 
 /** Holds Aurora's native surface lock across SDL's Java/native mutations. */
 internal class KartPadSurface(context: Context) : SDLSurface(context) {
+    init {
+        // Keep input focus, but do not draw Android's focus frame across the game.
+        setDefaultFocusHighlightEnabled(false)
+    }
+
     private external fun nativeBeginSurfaceMutation()
     private external fun nativeEndSurfaceMutation(ready: Boolean)
 

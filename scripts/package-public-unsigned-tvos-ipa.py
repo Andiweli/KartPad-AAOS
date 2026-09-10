@@ -8,9 +8,9 @@ import sys
 from pathlib import Path
 
 
-RELEASE_TAG = "v0.4.11-tvos.1"
-APP_VERSION = "0.4.11"
-APP_BUILD = "9"
+RELEASE_TAG = "v0.4.9"
+APP_VERSION = "0.4.9"
+APP_BUILD = "8"
 
 
 def fail(message: str) -> None:
@@ -26,7 +26,7 @@ def main() -> int:
         "output",
         type=Path,
         nargs="?",
-        help="Output IPA path (defaults to artifacts/KartPad-v0.4.11-tvos.1-unsigned.ipa)",
+        help="Output IPA path (defaults to artifacts/KartPad-v0.4.9-tvos-unsigned.ipa)",
     )
     args = parser.parse_args()
 
@@ -38,7 +38,7 @@ def main() -> int:
     output = (
         args.output.resolve()
         if args.output
-        else repo / "artifacts/KartPad-v0.4.11-tvos.1-unsigned.ipa"
+        else repo / "artifacts/KartPad-v0.4.9-tvos-unsigned.ipa"
     )
     if subprocess.check_output(
         ["git", "-C", str(repo), "status", "--porcelain", "--untracked-files=all"],
@@ -71,7 +71,7 @@ def main() -> int:
     xcode_build = app.parents[1]
     additional_entries = {
         "INSTALL_TVOS.md": repo / "docs/INSTALL_TVOS.md",
-        "RELEASE_NOTES.md": repo / "docs/releases/v0.4.11-tvos.1.md",
+        "RELEASE_NOTES.md": repo / "docs/releases/v0.4.9.md",
         "MULTIPLAYER.md": repo / "docs/MULTIPLAYER.md",
         "TVOS_TESTING.md": repo / "docs/TVOS-TESTING.md",
         "LICENSE": repo / "LICENSE",

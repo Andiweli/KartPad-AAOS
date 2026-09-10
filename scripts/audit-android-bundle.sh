@@ -27,7 +27,7 @@ done
 
 "$java" -jar "$bundletool" validate --bundle="$bundle" >/dev/null
 manifest="$($java -jar "$bundletool" dump manifest --bundle="$bundle")"
-expected_version_name="${KARTPAD_ANDROID_EXPECTED_VERSION_NAME:-0.4.12-android.2}"
+expected_version_name="${KARTPAD_ANDROID_EXPECTED_VERSION_NAME:-0.4.10-android.1}"
 if [[ -n "${KARTPAD_ANDROID_EXPECTED_VERSION_CODE:-}" ]]; then
   [[ "$manifest" == *"android:versionCode=\"$KARTPAD_ANDROID_EXPECTED_VERSION_CODE\""* ]] || {
     echo "ERROR: AAB version code does not match the requested code" >&2; exit 1;
@@ -113,9 +113,6 @@ expected_asset_members="$(printf '%s\n' \
   base/assets/wii/shared2/wc24/nwc24fls.bin \
   base/assets/wii/shared2/wc24/nwc24msg.cbk \
   base/assets/wii/shared2/wc24/nwc24msg.cfg | sort)"
-if printf '%s\n' "$asset_members" | grep -Fxq base/assets/kartpad-build.json; then
-  expected_asset_members="$(printf '%s\n' "$expected_asset_members" base/assets/kartpad-build.json | sort)"
-fi
 [[ "$asset_members" == "$expected_asset_members" ]] || {
   echo "ERROR: AAB asset set differs from the public runtime-resource allowlist" >&2
   exit 1

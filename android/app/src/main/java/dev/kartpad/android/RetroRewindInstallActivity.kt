@@ -1,10 +1,6 @@
 package dev.kartpad.android
 
-import android.Manifest
-import android.app.Activity
-import android.content.pm.PackageManager
 import android.graphics.Color
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.Gravity
@@ -14,36 +10,33 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
 import androidx.lifecycle.LiveData
 import java.util.concurrent.Executors
 
-/** Production owner for visible, lifecycle-independent Retro Rewind installation work. */
-internal class RetroRewindInstallActivity : Activity() {
+/** Visible owner of the in-process Retro Rewind installation. */
+internal class RetroRewindInstallActivity : ControllerMenuActivity() {
     private lateinit var status: TextView
     private lateinit var detail: TextView
     private lateinit var progress: ProgressBar
     private lateinit var primary: Button
     private lateinit var cancel: Button
-    private lateinit var workLiveData: LiveData<List<WorkInfo>>
+    private lateinit var workLiveData: LiveData<List<InstallInfo>>
     private val validator = Executors.newSingleThreadExecutor()
     private var validationGeneration = 0
     private var lastLoggedState = ""
-    private val workObserver = androidx.lifecycle.Observer<List<WorkInfo>> { work ->
+    private val workObserver = androidx.lifecycle.Observer<List<InstallInfo>> { work ->
         renderWork(selectCurrent(work.orEmpty()))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(buildContent())
-        primary.setOnClickListener { requestNotificationPermissionOrInstall() }
+        primary.setOnClickListener { enqueueInstall() }
         cancel.setOnClickListener {
             Log.i(LOG_TAG, "A3 installer UI cancel requested")
             RetroRewindInstallWork.cancel(this)
         }
-        workLiveData = WorkManager.getInstance(applicationContext)
-            .getWorkInfosForUniqueWorkLiveData(RetroRewindInstallWork.UNIQUE_NAME)
+        workLiveData = RetroRewindInstallWork.liveData
         workLiveData.observeForever(workObserver)
         if (BuildConfig.DEBUG && savedInstanceState == null &&
             intent.getBooleanExtra(EXTRA_DEBUG_FIXTURE, false)
@@ -59,35 +52,10 @@ internal class RetroRewindInstallActivity : Activity() {
         super.onDestroy()
     }
 
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray,
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode != NOTIFICATION_PERMISSION_REQUEST) return
-        if (grantResults.singleOrNull() == PackageManager.PERMISSION_GRANTED) {
-            enqueueInstall()
-        } else {
-            logState("notification-permission-required")
-            renderRetry(
-                "Notification permission is required so this long installation remains visible and controllable.",
-            )
-        }
-    }
-
-    private fun requestNotificationPermissionOrInstall() {
-        if (Build.VERSION.SDK_INT >= 33 &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
-            PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(
-                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                NOTIFICATION_PERMISSION_REQUEST,
-            )
-            return
-        }
-        enqueueInstall()
+    override fun onStop() {
+        // Configuration recreation retains the visible installation session.
+        if (!isChangingConfigurations) RetroRewindInstallWork.cancel(this)
+        super.onStop()
     }
 
     private fun enqueueInstall() {
@@ -122,7 +90,7 @@ internal class RetroRewindInstallActivity : Activity() {
         column.addView(
             label(
                 "Optional community content for extra tracks, characters, and Retro WFC. " +
-                    "KartPad downloads the pinned official full pack and verifies it before use.",
+                    "KartPad downloads the pinned official full pack and verifies it before use. Keep this screen open during installation.",
                 16f,
                 Color.rgb(220, 211, 218),
             ),
@@ -171,10 +139,10 @@ internal class RetroRewindInstallActivity : Activity() {
         height,
     ).apply { bottomMargin = bottom }
 
-    private fun selectCurrent(work: List<WorkInfo>): WorkInfo? =
+    private fun selectCurrent(work: List<InstallInfo>): InstallInfo? =
         work.firstOrNull { !it.state.isFinished } ?: work.lastOrNull()
 
-    private fun renderWork(info: WorkInfo?) {
+    private fun renderWork(info: InstallInfo?) {
         if (info == null) {
             validateInstalled()
             return
@@ -185,23 +153,24 @@ internal class RetroRewindInstallActivity : Activity() {
         val completed = data.getLong(RetroRewindInstallWork.KEY_COMPLETED_BYTES, 0)
         val total = data.getLong(RetroRewindInstallWork.KEY_TOTAL_BYTES, 0)
         val active = !info.state.isFinished
+        window.decorView.keepScreenOn = active
         cancel.visibility = if (active) View.VISIBLE else View.GONE
         primary.visibility = if (active) View.GONE else View.VISIBLE
         when (info.state) {
-            WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> renderWaiting()
-            WorkInfo.State.RUNNING -> renderProgress(phase, completed, total)
-            WorkInfo.State.SUCCEEDED -> {
+            InstallInfo.State.ENQUEUED, InstallInfo.State.BLOCKED -> renderWaiting()
+            InstallInfo.State.RUNNING -> renderProgress(phase, completed, total)
+            InstallInfo.State.SUCCEEDED -> {
                 if (BuildConfig.DEBUG && intent.getBooleanExtra(EXTRA_DEBUG_FIXTURE, false)) {
                     renderFixtureComplete()
                 } else {
                     validateInstalled()
                 }
             }
-            WorkInfo.State.CANCELLED -> {
+            InstallInfo.State.CANCELLED -> {
                 logState("cancelled")
                 renderRetry("Installation cancelled. The partial download was kept for resume.")
             }
-            WorkInfo.State.FAILED -> {
+            InstallInfo.State.FAILED -> {
                 logState("failed")
                 val error = data.getString(RetroRewindInstallWork.KEY_ERROR) ?: "unknown"
                 val latest = data.getString(RetroRewindInstallWork.KEY_LATEST_VERSION)
@@ -237,7 +206,7 @@ internal class RetroRewindInstallActivity : Activity() {
     private fun renderWaiting() {
         logState("waiting")
         status.text = "Waiting to download…"
-        detail.text = "Connect to the internet to continue. You can leave this screen."
+        detail.text = "Connect to the internet and keep this screen open."
         progress.isIndeterminate = true
         progress.visibility = View.VISIBLE
     }
@@ -257,7 +226,7 @@ internal class RetroRewindInstallActivity : Activity() {
             detail.text = "$percent% • ${formatBytes(completed)} of ${formatBytes(total)}"
         } else {
             progress.isIndeterminate = true
-            detail.text = "You can leave this screen; installation continues in the background."
+            detail.text = "Keep this screen open until installation finishes. Leaving cancels the operation."
         }
         progress.visibility = View.VISIBLE
     }
@@ -330,7 +299,6 @@ internal class RetroRewindInstallActivity : Activity() {
 
     companion object {
         private const val LOG_TAG = "KartPadInstaller"
-        private const val NOTIFICATION_PERMISSION_REQUEST = 0x4b50
         private const val EXTRA_DEBUG_FIXTURE = "dev.kartpad.android.TEST_RETRO_REWIND_INSTALLER_UI"
     }
 }

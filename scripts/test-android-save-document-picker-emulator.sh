@@ -15,7 +15,7 @@ active="files/KartPad/NAND/title/00010004/524d4350/data/rksys.dat"
 backup_root="files/KartPad/SaveBackups"
 recovery="$backup_root/rksys-documentui-fixture-recovery.dat"
 pending="files/KartPad/PendingSaves/rksys.dat"
-public_export="/sdcard/Download/KartPad-original-rksys.dat"
+public_export="/sdcard/Download/KartPad-RMCP01-rksys.dat"
 ui_tree="/sdcard/kartpad-save-document-picker.xml"
 expected_main_dol_sha256="80d18895b39c63bd80f457398bfcbb91b7d16ac116a41a88967e954080155b05"
 success=0
@@ -119,8 +119,6 @@ open_save_manager() {
   tap_node text "Game Data & Saves"
   wait_for_text "Manage Saves…"
   tap_node text "Manage Saves…"
-  wait_for_text "Original Mario Kart Wii"
-  tap_node text "Original Mario Kart Wii"
   wait_for_text "EXPORT SAVE BACKUP…"
 }
 
@@ -175,9 +173,8 @@ wait_for_node content-desc "Menu"
 
 open_save_manager
 tap_node text "RESTORE SAVE BACKUP…"
-tap_node text "CHOOSE BACKUP…"
-wait_for_text "KartPad-original-rksys.dat"
-tap_node text "KartPad-original-rksys.dat"
+wait_for_text "KartPad-RMCP01-rksys.dat"
+tap_node text "KartPad-RMCP01-rksys.dat"
 wait_for_text "Save Restore Scheduled"
 "${adb_target[@]}" shell run-as "$package" test -f "$pending" ||
   fail "validated system-picker import was not staged"

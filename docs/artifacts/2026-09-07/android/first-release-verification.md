@@ -75,21 +75,5 @@ contained 19,227 samples, none lost. Startup compilation is a strong correlate;
 warm CPU/presentation/thermal effects and network latency remain distinct,
 unresolved questions. Raw profiles and logs stay ignored and local.
 
-## Published and anonymously verified
-
-PR #71 merged to `e4ac47fd0779a439b4ef47162d0e99d546dd063d`; the annotated
-`v0.4.10-android.1` tag points to that exact commit. Its post-merge build retained
-the AAB hash above. The non-prerelease Android release is public; Apple assets
-were not replaced. Only the APK, notices ZIP and SHA256SUMS were uploaded.
-
-Fresh unauthenticated downloads match both local artifacts byte-for-byte and
-pass SHA256SUMS. The downloaded APK passes the same strict audit. The notices
-ZIP contains 26 allowlisted entries including exact-source provenance, root
-GPLv3 text and pinned third-party licenses; two independent packages match.
-Notices ZIP: 89,737 bytes, SHA-256
-`574aa1857232064e199b14660317d1863d99bcc6e9a98dda3beffb060eb7cf53`.
-
-The disposable API 36 AVD was stopped and deleted; no phone data was removed.
-A separate, audited, unpublished debug-identity APK with the same correction
-is ready locally for the owner's save-preserving preview update when the phone
-is reattached. That private APK is not the public release asset.
+Publication/anonymous-download verification is recorded separately after the
+hosted bytes have actually been checked. This file alone does not claim upload.

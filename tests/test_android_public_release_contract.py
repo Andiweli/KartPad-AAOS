@@ -26,7 +26,7 @@ class AndroidPublicReleaseTests(unittest.TestCase):
 
     def test_update_guide_preserves_private_previews(self):
         guide = (REPO / "docs/INSTALL_ANDROID.md").read_text()
-        for required in ("Do not uninstall", "does not back up Retro", "different local",
+        for required in ("Do not uninstall", "both profiles", "different local",
                          "60 FPS", "APK", "SHA256SUMS"):
             self.assertIn(required, guide)
 

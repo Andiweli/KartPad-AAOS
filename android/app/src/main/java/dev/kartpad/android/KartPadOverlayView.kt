@@ -96,6 +96,8 @@ class KartPadOverlayView(context: Context) : View(context) {
     init {
         setWillNotDraw(false)
         isFocusable = true
+        // This full-screen input layer is not a menu item with a visible focus border.
+        setDefaultFocusHighlightEnabled(false)
         isHapticFeedbackEnabled = true
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
         buildControls()

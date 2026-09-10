@@ -15,7 +15,7 @@ import android.widget.TextView
 import java.util.concurrent.Executors
 
 /** Storage Access Framework owner for import/reimport and save-preserving removal. */
-class KartPadGameDataActivity : Activity() {
+class KartPadGameDataActivity : ControllerMenuActivity() {
     private lateinit var status: TextView
     private lateinit var importButton: Button
     private lateinit var importFolderButton: Button
@@ -287,8 +287,6 @@ class KartPadGameDataActivity : Activity() {
         var cause = error
         while (cause.cause != null && cause.cause !== cause) cause = cause.cause!!
         return when {
-            cause is android.system.ErrnoException && cause.errno == android.system.OsConstants.ENOSPC ->
-                "Not enough free storage to finish importing game data. Free some space and try again. Existing game data and saves are unchanged."
             cause is IllegalArgumentException && !cause.message.isNullOrBlank() -> cause.message!!
             cause is UnsatisfiedLinkError -> "Disc-image support could not start in this build."
             else -> fallback

@@ -2,27 +2,6 @@
 
 ## Current state
 
-Android `v0.4.10-android.1` is published from main `e4ac47f`, including the
-upstream issue #94 serial backport. Hosted APK/notices match local checksums;
-downloaded APK audit passes. A private debug-identity code 21 APK with the same
-correction is ready for a guarded in-place Pixel update after reattachment and
-a fresh save backup. Do not use the old Preview 15 online. The public signer
-must not be forced onto that installation by uninstalling it.
-
-The owner then requested a corrected iPhone/iPad IPA and an issue #94 response.
-The iPhone/iPad 0.4.11/build 26 native rebuild is published and anonymously
-verified from `7f53ea0`; see `docs/artifacts/2026-09-07/ios-v0411-release.md`.
-The owner also requested the matching Mac rebuild, tracked as 0.4.11/build 26
-under `v0.4.11-macos.1` so the published IPA tag stays immutable. #94 has a
-maintainer response crediting patchzyy and linking verified fixed downloads.
-Source correction, new binary verification and historical server-CSNum cleanup
-remain distinct. Old experimental tvOS is still offline-only pending rebuild.
-
-Mac publication is complete from `0c70061`; the hosted ZIP matches the local
-audited bytes and its extracted ad-hoc signature passes. The isolated Original
-startup/title-screen run was around 60 FPS and quit normally without changing
-installed save/Mii/config hashes. See `docs/artifacts/2026-09-07/macos-v0411-release.md`.
-
 2026-09-07: the owner accepted Android Preview 15/code 20 with Razer Kishi in
 Original Grand Prix; touch controls hide on connection and gameplay works.
 Earlier that session they reported Retro Rewind 6.12.7 Retro WFC login,

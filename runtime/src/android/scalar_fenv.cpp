@@ -16,13 +16,3 @@ extern "C" __attribute__((noinline)) int KartPadAndroidCaptureScalarFlags() noex
     asm volatile("msr fpsr, %0" :: "r"(cleared) : "memory");
   return status & (FE_OVERFLOW | FE_UNDERFLOW | FE_INEXACT);
 }
-
-// An opaque pre-operation boundary preserves compiler ordering just as the
-// library call does. Avoid writing FPSR when its exception bits are already zero.
-extern "C" __attribute__((noinline)) void KartPadAndroidClearScalarFlags() noexcept {
-  std::uint64_t status;
-  asm volatile("mrs %0, fpsr" : "=r"(status) :: "memory");
-  const auto cleared = status & ~std::uint64_t(FE_ALL_EXCEPT);
-  if (cleared != status)
-    asm volatile("msr fpsr, %0" :: "r"(cleared) : "memory");
-}

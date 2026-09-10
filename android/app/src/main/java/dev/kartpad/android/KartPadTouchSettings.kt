@@ -78,16 +78,16 @@ internal object KartPadTouchSettings {
     }
 
     fun resolutionScale(context: Context): Float = preferences(context)
-        .getFloat(RESOLUTION_SCALE, 1f).coerceIn(1f, 4f)
+        .getFloat(RESOLUTION_SCALE, 1f).coerceIn(0.5f, 4f)
 
     fun setResolutionScale(context: Context, value: Float) {
         preferences(context).edit().putFloat(
-            RESOLUTION_SCALE, value.coerceIn(1f, 4f),
+            RESOLUTION_SCALE, value.coerceIn(0.5f, 4f),
         ).apply()
     }
 
-    fun motionEnabled(context: Context): Boolean = preferences(context)
-        .getBoolean(MOTION_ENABLED, false)
+    fun motionEnabled(context: Context): Boolean = !AaosWindow.isAutomotive(context) &&
+        preferences(context).getBoolean(MOTION_ENABLED, false)
 
     fun setMotionEnabled(context: Context, value: Boolean) {
         preferences(context).edit().putBoolean(MOTION_ENABLED, value).apply()

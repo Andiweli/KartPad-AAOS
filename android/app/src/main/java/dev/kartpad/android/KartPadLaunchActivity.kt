@@ -22,7 +22,7 @@ import android.widget.TextView
 import java.util.concurrent.Executors
 
 /** Production owner for choosing the immutable runtime profile before SDL starts. */
-open class KartPadLaunchActivity : Activity() {
+open class KartPadLaunchActivity : ControllerMenuActivity() {
     protected open fun pausedProfile(): String? = null
     private fun requestedProfileFile() = java.io.File(filesDir, "KartPad/RequestedRuntimeProfile")
     private lateinit var status: TextView
@@ -34,17 +34,26 @@ open class KartPadLaunchActivity : Activity() {
     private var retroInstalled = false
     private var gameDataReady = false
     private var pendingProfile: String? = null
+    private var automaticStartAttempted = false
+    private var launcherResumed = false
+    private lateinit var chooserContent: View
+    private fun lastProfileFile() = java.io.File(filesDir, "KartPad/LastRuntimeProfile")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        KartPadExitDiagnostics.mark(this, pausedProfile() ?: "chooser")
-        setContentView(buildContent())
+        automaticStartAttempted = savedInstanceState?.getBoolean("automaticStartAttempted") ?: false
+        pendingProfile = savedInstanceState?.getString("pendingProfile")
+        chooserContent = buildContent()
+        // Keep first-run choices out of the normal retained-data startup path.
+        chooserContent.visibility = if (pausedProfile() != null) View.VISIBLE else View.INVISIBLE
+        setContentView(chooserContent)
         original.setOnClickListener { selectMode("base") }
         retro.setOnClickListener { selectMode("retro_rewind") }
     }
 
     override fun onResume() {
         super.onResume()
+        launcherResumed = true
         pausedProfile()?.let { current ->
             progress.visibility = View.GONE
             original.isEnabled = true
@@ -56,11 +65,22 @@ open class KartPadLaunchActivity : Activity() {
             hideStatus("Current game paused")
             return
         }
-        if (pendingProfile == null) {
+        if (pendingProfile == null && !automaticStartAttempted) {
             pendingProfile = runCatching { requestedProfileFile().readText() }.getOrNull()
                 ?.takeIf { it == "base" || it == "retro_rewind" }
         }
         validateRetroRewind()
+    }
+
+    override fun onPause() {
+        launcherResumed = false
+        super.onPause()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("automaticStartAttempted", automaticStartAttempted)
+        outState.putString("pendingProfile", pendingProfile)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onDestroy() {
@@ -104,13 +124,23 @@ open class KartPadLaunchActivity : Activity() {
                     }
                 }
             }.getOrDefault(false)
+            val remembered = runCatching { lastProfileFile().readText().trim() }.getOrNull()
             runOnUiThread {
-                if (generation != validationGeneration || isFinishing || isDestroyed) {
+                if (generation != validationGeneration || isFinishing || isDestroyed || !launcherResumed) {
                     return@runOnUiThread
                 }
                 retroInstalled = valid
                 progress.visibility = View.GONE
                 gameDataReady = gameDataValid
+                val directProfile = LaunchPolicy.select(gameDataReady, pendingProfile, remembered,
+                    retroInstalled, automaticStartAttempted)
+                if (directProfile != null) {
+                    automaticStartAttempted = true
+                    pendingProfile = null
+                    continueSelectedMode(directProfile)
+                    return@runOnUiThread
+                }
+                chooserContent.visibility = View.VISIBLE
                 original.isEnabled = true
                 retro.isEnabled = true
                 setModeText(
@@ -132,10 +162,6 @@ open class KartPadLaunchActivity : Activity() {
                     hideStatus("Original is ready; Retro Rewind is optional")
                 }
                 Log.i(LOG_TAG, "A3 mode chooser retro-installed=$valid")
-                pendingProfile?.takeIf { gameDataReady }?.let { profile ->
-                    pendingProfile = null
-                    continueSelectedMode(profile)
-                }
             }
         }
     }
@@ -173,7 +199,12 @@ open class KartPadLaunchActivity : Activity() {
     }
 
     private fun continueSelectedMode(profile: String) {
+        automaticStartAttempted = true
         if (profile == "retro_rewind" && !retroInstalled) {
+            // Returning from/cancelling the installer must leave a usable chooser.
+            chooserContent.visibility = View.VISIBLE
+            original.isEnabled = true
+            retro.isEnabled = true
             startActivity(Intent(this, RetroRewindInstallActivity::class.java))
         } else {
             launch(profile)
@@ -181,6 +212,19 @@ open class KartPadLaunchActivity : Activity() {
     }
 
     private fun launch(profile: String) {
+        // Atomic disk storage also works across the isolated launcher/game processes.
+        runCatching {
+            lastProfileFile().parentFile?.mkdirs()
+            val file = android.util.AtomicFile(lastProfileFile())
+            val output = file.startWrite()
+            try {
+                output.write(profile.toByteArray(Charsets.UTF_8))
+                file.finishWrite(output)
+            } catch (error: Throwable) {
+                file.failWrite(output)
+                throw error
+            }
+        }.onFailure { Log.w(LOG_TAG, "Could not retain selected game", it) }
         requestedProfileFile().delete()
         Log.i(LOG_TAG, "A3 mode chooser selected=$profile")
         startActivity(
@@ -214,6 +258,9 @@ open class KartPadLaunchActivity : Activity() {
                 setColor(color)
             }
             addState(intArrayOf(android.R.attr.state_pressed), fill(pressed))
+            addState(intArrayOf(android.R.attr.state_focused), fill(pressed).apply {
+                setStroke(dp(3), Color.WHITE)
+            })
             addState(intArrayOf(-android.R.attr.state_enabled), fill(Color.rgb(62, 62, 72)))
             addState(intArrayOf(), fill(normal))
         }
@@ -240,10 +287,11 @@ open class KartPadLaunchActivity : Activity() {
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(0, dp(16), 0, dp(16))
+            translationY = if (AaosWindow.isAutomotive(this@KartPadLaunchActivity)) 0f else -dp(18).toFloat()
         }
         column.addView(ImageView(this).apply {
-            setImageResource(R.drawable.kartpad_app_icon)
+            setImageResource(R.drawable.ic_kartpad_steering_wheel)
+            imageTintList = ColorStateList.valueOf(Color.rgb(255, 107, 46))
             contentDescription = "KartPad"
             scaleType = ImageView.ScaleType.CENTER_INSIDE
         }, LinearLayout.LayoutParams(dp(48), dp(48)).apply {
@@ -255,7 +303,7 @@ open class KartPadLaunchActivity : Activity() {
             includeFontPadding = false
         }, layout(dp(12)))
         column.addView(
-            label("Choose your way to race", 20f, Color.argb(224, 255, 255, 255)).apply {
+            label("KartPad 1.0 • Choose your way to race", 20f, Color.argb(224, 255, 255, 255)).apply {
                 setTypeface(typeface, Typeface.BOLD)
                 includeFontPadding = false
             },
@@ -305,6 +353,7 @@ open class KartPadLaunchActivity : Activity() {
                     .apply { marginStart = dp(9) },
             )
         }
+        choices.addOnSizeChangedForLayout(original, retro)
         column.addView(choices, layout(dp(10)))
         progress = ProgressBar(this).apply {
             isIndeterminate = true
@@ -341,56 +390,22 @@ open class KartPadLaunchActivity : Activity() {
             }
         }, layout(0))
 
-        if (pausedProfile() == null && KartPadRatingStorage.hasPending(filesDir)) {
-            column.addView(Button(this).apply {
-                text = "Cancel Staged Rating Restore…"
-                setOnClickListener {
-                    AlertDialog.Builder(this@KartPadLaunchActivity)
-                        .setTitle("Cancel Staged Rating Restore?")
-                        .setMessage("Remove the pending request so you can start the game again. Current ratings and retained backups will stay as they are; this does not undo a restore that already completed.")
-                        .setNegativeButton("Keep Restore", null)
-                        .setPositiveButton("Cancel Restore") { _, _ ->
-                            if (pausedProfile() == null) runCatching {
-                                KartPadRatingStorage.cancelPending(filesDir)
-                            }.onSuccess { visibility = View.GONE }
-                                .onFailure { showStatus("The staged rating restore could not be cancelled.") }
-                        }.show()
-                }
-            }, layout(0))
-        }
-
-        if (pausedProfile() == null) column.addView(Button(this).apply {
-            fun refresh() {
-                text = "Renderer Validation: " + if (KartPadRendererDiagnostics.enabled(context)) "On" else "Off"
-            }
-            refresh()
-            isAllCaps = false
-            setTextColor(Color.argb(184, 255, 255, 255))
-            setBackgroundColor(Color.TRANSPARENT)
-            setOnClickListener {
-                val enable = !KartPadRendererDiagnostics.enabled(context)
-                AlertDialog.Builder(this@KartPadLaunchActivity)
-                    .setTitle("Renderer Validation")
-                    .setMessage("Checks the actual game renderer and enables buffer bounds protection. This may slow the game down; it is a diagnostic mode, not a graphics fix. Applies when you next open a game. After reproducing once, close KartPad, reopen this chooser and export private diagnostics. Turn it off here for normal play.")
-                    .setNegativeButton("Cancel", null)
-                    .setPositiveButton(if (enable) "Enable" else "Turn Off") { _, _ ->
-                        if (!KartPadRendererDiagnostics.setEnabled(context, enable)) {
-                            showStatus("The diagnostic setting could not be saved. Please try again.")
-                        }
-                        refresh()
-                    }.show()
-            }
-        }, layout(0))
-
-        val availableWidthDp = (resources.displayMetrics.widthPixels / density).toInt() - 64
-        val contentWidth = dp(minOf(760, maxOf(320, availableWidthDp)))
+        // Measure the chooser within the actual app window, including AAOS safe fitting.
+        val contentWidth = FrameLayout.LayoutParams.MATCH_PARENT
         val scroll = ScrollView(this).apply {
             isFillViewport = true
             clipToPadding = false
+            addOnLayoutChangeListener { _, left, _, right, _, _, _, _, _ ->
+                val available = (right - left).coerceAtLeast(1)
+                val wanted = minOf(dp(760), available)
+                if (column.layoutParams.width != wanted) {
+                    column.layoutParams = column.layoutParams.apply { width = wanted }
+                }
+            }
             addView(column, FrameLayout.LayoutParams(
                 contentWidth,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.TOP or Gravity.CENTER_HORIZONTAL,
+                Gravity.CENTER,
             ))
         }
         return FrameLayout(this).apply {
@@ -400,6 +415,28 @@ open class KartPadLaunchActivity : Activity() {
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT,
             ))
+        }
+    }
+
+    private fun LinearLayout.addOnSizeChangedForLayout(first: View, second: View) {
+        fun dp(value: Int) = (value * resources.displayMetrics.density + 0.5f).toInt()
+        addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
+            if (right - left == oldRight - oldLeft) return@addOnLayoutChangeListener
+            val vertical = right - left < dp(620)
+            val wanted = if (vertical) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+            if (orientation != wanted) {
+                orientation = wanted
+                first.layoutParams = LinearLayout.LayoutParams(
+                    if (vertical) LinearLayout.LayoutParams.MATCH_PARENT else 0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, if (vertical) 0f else 1f).apply {
+                    if (vertical) bottomMargin = dp(8) else marginEnd = dp(9)
+                }
+                second.layoutParams = LinearLayout.LayoutParams(
+                    if (vertical) LinearLayout.LayoutParams.MATCH_PARENT else 0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT, if (vertical) 0f else 1f).apply {
+                    if (!vertical) marginStart = dp(9)
+                }
+            }
         }
     }
 

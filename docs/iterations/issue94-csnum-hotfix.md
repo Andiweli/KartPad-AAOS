@@ -46,8 +46,5 @@ review of any collateral ban. Do not wipe saves, regenerate console identities,
 or create replacement accounts as a workaround.
 
 Host regression and patch replay are not a production-service login test or
-proof of corrected release binaries. Android `v0.4.10-android.1` and iPhone/iPad
-`v0.4.11` have since been rebuilt, published and anonymously re-audited with
-this backport. The matching Mac rebuild is tracked in `v0.4.11-macos.1` notes.
-The experimental tvOS rebuild is tracked in `v0.4.11-tvos.1` notes.
-Erroneous server-side history and exact-device online acceptance remain open boundaries.
+proof of corrected release binaries. Android release coordination is holding
+publication for a native rebuild and package verification with this backport.

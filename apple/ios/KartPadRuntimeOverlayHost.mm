@@ -8,7 +8,6 @@
 #import "KartPadMotionSteering.h"
 #import "KartPadPhysicalControllers.h"
 #import "KartPadRetroRewindInstaller.h"
-#import "KartPadDiagnosticContext.h"
 #import "KartPadMiiManager.h"
 #import "SunPadDiagnostics.h"
 #import "SunPadGameOverlay.h"
@@ -688,11 +687,12 @@ NSError *KartPadPerformGameDataImport(NSURL *url,
   [self.view.layer insertSublayer:gradient atIndex:0];
   self.backgroundGradient = gradient;
 
-  UIImage *markImage = [[UIImage imageNamed:@"KartPadLogo"]
-      imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+  UIImage *markImage = [UIImage systemImageNamed:@"steeringwheel"] ?:
+      [UIImage systemImageNamed:@"flag.checkered"];
   UIImageView *mark = [[UIImageView alloc] initWithImage:markImage];
   mark.translatesAutoresizingMaskIntoConstraints = NO;
   mark.contentMode = UIViewContentModeScaleAspectFit;
+  mark.tintColor = [UIColor colorWithRed:1.0 green:0.42 blue:0.18 alpha:1.0];
   mark.accessibilityLabel = @"KartPad";
   [NSLayoutConstraint activateConstraints:@[
     [mark.widthAnchor constraintEqualToConstant:48.0],
@@ -3267,20 +3267,12 @@ NSError *KartPadPerformGameDataImport(NSURL *url,
 
 - (NSString *)gameOverlayDiagnosticContext:(SunPadGameOverlay *)overlay {
   (void)overlay;
-  SunPadSettings *settings = SunPadSettings.sharedSettings;
-  return KartPadDiagnosticContext(
-      [KartPadRetroRewindInstaller.installedRootPath stringByAppendingPathComponent:@"version.txt"],
-      KartPadRetroRewindInstaller.requiredVersion,
-      gKartPadRetroRewindSelected ? @"retro_rewind" : @"base",
-      settings.renderScaleFloat, settings.aspectRatioMode);
+  return @"product=KartPad\nsurface=SDL UIKit+Metal\ncore=full-retail\nprivateDataIncluded=false";
 }
 
 - (NSString *)gameOverlayPerformanceProfile:(SunPadGameOverlay *)overlay {
   (void)overlay;
-  SunPadSettings *settings = SunPadSettings.sharedSettings;
-  return [NSString stringWithFormat:@"%@; scale=%.2fx; aspect=%ld",
-      gKartPadRetroRewindSelected ? @"retro_rewind" : @"base",
-      settings.renderScaleFloat, (long)settings.aspectRatioMode];
+  return @"full-retail-simulator";
 }
 
 @end
