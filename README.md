@@ -1,8 +1,14 @@
 # KartPad AAOS — Mario Kart Wii for Android & Android Automotive
 
-**KartPad AAOS is an Android and Android Automotive OS (AAOS) port of Mario Kart Wii, with optional Retro Rewind support, native ARM64 execution and Vulkan graphics.** This fork focuses on Android handhelds and automotive infotainment hardware, with particular attention to CPU performance and playable frame rates on Qualcomm SA8155P-based systems.
+![OS](https://img.shields.io/badge/OS-Android%2010%20and%20newer-green)
+![Architecture](https://img.shields.io/badge/architecture-64bit-orange.svg)
+![Controller](https://img.shields.io/badge/Controls-Gamepad/Touch-blueviolet)
+[![Support via PayPal](https://img.shields.io/badge/Support%20via-PayPal-0070BA?logo=paypal\&logoColor=white)](https://paypal.me/andiweli)
 
-Maintained by [Andiweli](https://github.com/Andiweli), the project builds on [KartPad by chrissotraidis](https://github.com/chrissotraidis/kartpad) and [WiiCompiled](https://github.com/patchzyy/Wiicompiled).
+**KartPad AAOS is an Android and Android Automotive OS (AAOS) port of Mario Kart Wii, with optional Retro Rewind support, native ARM64 execution and Vulkan graphics.** This fork focuses on Android handhelds and automotive infotainment hardware, with particular attention to CPU performance and playable frame rates on Qualcomm systems (e.g. SA8155P).
+
+> [!NOTE]
+> The project builds on [KartPad by chrissotraidis](https://github.com/chrissotraidis/kartpad) and [WiiCompiled](https://github.com/patchzyy/Wiicompiled).
 
 **Your own supported Mario Kart Wii game image is required. No game image or extracted Nintendo assets are included.**
 
@@ -52,7 +58,7 @@ Start at **1× Native**. If performance is insufficient, compare **0.75×** and 
 | --- | --- |
 | Architecture | ARM64 / `arm64-v8a` |
 | Graphics | A working Vulkan driver |
-| Android version | Android 10 / API 29 or newer for the customized port described here; the checked-in base Android module currently declares API 28 |
+| Android version | Android 10 / API 29 or newer for the customized port described here |
 | Automotive devices | AAOS with support for installing and running compatible games |
 | Game data | Your own supported PAL / European **`RMCP01`, revision 0** WBFS or ISO |
 | Controls | A compatible gamepad is recommended, especially on AAOS |
