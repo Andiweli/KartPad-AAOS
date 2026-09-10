@@ -1,111 +1,14 @@
-# KartPad
+# KartPad Android/AAOS
 
-KartPad is an Apple and Android fork and productization of
-[WiiCompiled](https://github.com/patchzyy/Wiicompiled), the original static-
-recompilation project for Mario Kart Wii. KartPad adds a first-class dual-game
-Original Mario Kart Wii / Retro Rewind runtime, native platform controls, data
-management, packaging, and release workflows.
+KartPad is a Fork of [KartPad](https://github.com/chrissotraidis/kartpad) which is a Mario Kart Wii port for Android, iOS and others. KartPad adds a first-class dual-game Original Mario Kart Wii / Retro Rewind runtime, native platform controls, data management, packaging, and release workflows.
 
-<p align="center">
-  <strong>Mario Kart Wii and Retro Rewind, native for Android, iOS, iPadOS, and macOS.</strong><br>
-  Native static recompilation through Vulkan on Android and Metal on Apple platforms, with touch controls, motion steering, controllers, and optional Retro Rewind content. tvOS is currently an experimental preview.
-</p>
+This repository focusses on an optimized Android version, with recompiled .so Files, optimized native TLS, improved floating-point calculations and utilization of high-performance CPU cores. It was thus possible to achieve a nearly smooth 50–60 FPS on an AAOS vehicle equipped with an SA8155P board.
 
-<p align="center">
-  <img alt="Apple Silicon" src="https://img.shields.io/badge/Apple%20Silicon-arm64-0A84FF?logo=apple">
-  <img alt="Metal renderer" src="https://img.shields.io/badge/renderer-Metal-5E5CE6">
-  <img alt="Android ARM64 with Vulkan" src="https://img.shields.io/badge/Android-ARM64%20%2F%20Vulkan-3DDC84?logo=android">
-  <img alt="Ahead-of-time static recompilation" src="https://img.shields.io/badge/PowerPC-static%20recompilation-FF9F0A">
-  <img alt="macOS development target" src="https://img.shields.io/badge/macOS%20target-14%2B-0A84FF">
-  <img alt="iPhone and iPad physical builds accepted" src="https://img.shields.io/badge/iPhone%20%2F%20iPad-physical%20builds%20accepted-30D158">
-  <img alt="Retro Rewind supported" src="https://img.shields.io/badge/Retro%20Rewind-6.12.7-FF375F">
-  <img alt="Game data not included" src="https://img.shields.io/badge/game%20data-not%20included-FF453A">
-</p>
-
-![KartPad running a race on DK Summit on iPad](docs/images/kartpad-dk-summit-ipad.png)
-
-> [!IMPORTANT]
-> **KartPad 0.4.11 build 26 is the current iPhone/iPad and Mac release.** It fixes the
-> serious online console-serial bug reported in [#94](https://github.com/chrissotraidis/kartpad/issues/94).
-> Update before online play; older iOS, Mac and tvOS packages should stay offline.
-> The Mac package is in `v0.4.11-macos.1`. The IPA requires local
-> re-signing and your own legally obtained supported game image. Retro Rewind
-> 6.12.7 installs separately through KartPad.
->
-> It retains the accepted iPad touch layout, **Return to KartPad Menu**,
-> and clearer Mii/license editing. It retains the local-controller registration
-> fix, player-slot status, and face-button remapping from 0.4.9. Native private
-> rooms and production online-race verification remain open. Apple TV remains
-> experimental. **Android now has its first supported community release:**
-> [download the Android APK](https://github.com/chrissotraidis/kartpad/releases/tag/v0.4.10-android.1).
-> See the [Android installation guide](docs/INSTALL_ANDROID.md) before updating a private preview.
->
-> The downloads include ahead-of-time translated game logic, but no disc image,
-> extracted game assets, Retro Rewind pack, saves, signing identity, or
-> provisioning profile.
-
-## iPhone and iPad 0.4.11 identity hotfix
-
-This native rebuild includes the narrow upstream CSNum correction, credited to
-patchzyy, while preserving stored identities, friend codes and saves. The old
-function could make different serials collapse to the same online identity and
-overwrite adjacent guest memory. Tests cover the actual corrected function;
-the fix does not clear old server-side identity history or reverse existing bans.
-See the [iPhone/iPad notes](docs/releases/v0.4.11.md) and
-[Mac notes](docs/releases/v0.4.11-macos.1.md). The old tvOS binary and
-server-admin remediation remain separate; source fixes do not repair old downloads.
-
-### Earlier physical layout acceptance (0.4.10)
-
-The maintainer previously accepted the macOS, iOS, and iPadOS builds as stable
-for general use. The latest physical review was **0.4.10 build 25 on iPad**:
-Retro Rewind launched, Game Data & Saves was clear, and the in-game Retro WFC
-menu allowed navigation to **Friends**. Earlier checks covered license deletion
-and creation, returning to the chooser, and reopening to switch games. This
-review does not establish a completed online race.
-
-[Download the corrected iPhone/iPad IPA and checksum](https://github.com/chrissotraidis/kartpad/releases/tag/v0.4.11).
-The menu names below follow 0.4.10; 0.4.9 calls them **Manage Existing Licenses…**
-and **Set Player Name…**. The corrected
-[macOS download](https://github.com/chrissotraidis/kartpad/releases/tag/v0.4.11-macos.1)
-retains the native Mac controls and data-management flows.
-
-## What is available now?
-
-| Platform | Current corrected download | Installation |
-|---|---|---|
-| Android ARM64 | [0.4.10-android.1, code 21](https://github.com/chrissotraidis/kartpad/releases/tag/v0.4.10-android.1) | [APK guide](docs/INSTALL_ANDROID.md) |
-| iPhone / iPad | [0.4.11, build 26](https://github.com/chrissotraidis/kartpad/releases/tag/v0.4.11) | [Unsigned IPA guide](docs/INSTALL_IPA.md) |
-| Apple Silicon Mac | [0.4.11, build 26](https://github.com/chrissotraidis/kartpad/releases/tag/v0.4.11-macos.1) | [Mac ZIP guide](docs/INSTALL_MACOS.md) |
-| Apple TV (experimental) | [0.4.11, build 9](https://github.com/chrissotraidis/kartpad/releases/tag/v0.4.11-tvos.1) | [tvOS IPA guide](docs/INSTALL_TVOS.md) |
-
-All four contain the corrected online console-serial implementation. Platform
-release tags are independent; identical version strings are not required for
-the shared fix. Apple TV hardware/online acceptance remains experimental.
-
-### Android: first community release
-
-[Download Android APK, notices and SHA-256 checksums](https://github.com/chrissotraidis/kartpad/releases/tag/v0.4.10-android.1)
-
-[Android **0.4.12-android.2 diagnostic beta**](https://github.com/chrissotraidis/kartpad/releases/tag/v0.4.12-android.2)
-adds optional validation of the actual game renderer and OS exit history, while
-retaining profile-specific save transfer and checked disc imports. Same public
-signer; physical acceptance pending. It is not a verified graphics or frame-drop fix.
-· [Install and update](docs/INSTALL_ANDROID.md) · [Build from source](android/README.md).
-
-The first Android release promotes the runtime tested on a **Pixel 9 Pro XL**.
-The maintainer accepted Original Mario Kart Wii gameplay with a **Razer Kishi**,
-including automatic touch-control hiding, and reported Retro Rewind 6.12.7
-Retro WFC login, worldwide matchmaking and live race play. Complete online
-results/reconnect and every controller model are not yet verified.
+### How to install?
 
 Requires an **ARM64 Android device with Vulkan** and your own supported PAL
-`RMCP01` revision 0 image. The package minimum is Android 9/API 28; that oldest
-physical OS/GPU combination remains unverified. Start at **1x Native** resolution
-and increase it if your phone maintains good performance. The maintainer played
-at 3x, but startup shader compilation, track-dependent dips and warm slowdown
-remain known limitations—not a sustained-60-FPS guarantee. Android uses an
-**APK**, not an IPA, and no Play Store listing is implied.
+`RMCP01` revision 0 image. The package minimum is Android 10/API 29. Start at **1x Native** resolution
+and increase it if your phone maintains good performance. If you have poor performance at **1x Native** you can try the new scaled down resolutions **0.5x** or **0.75** which pump up the FPS a little bit but with slightly lower resolution.
 
 ### Platform overview
 
@@ -125,16 +28,6 @@ remain known limitations—not a sustained-60-FPS guarantee. Android uses an
 | Is Wiimmfi supported for Original? | No; it is an open compatibility request [#90](https://github.com/chrissotraidis/kartpad/issues/90). Changing a server address/MAC or importing a patched ISO does not add the matching native executable support. |
 | Can I use AirPlay or an external display? | This is under investigation in [#100](https://github.com/chrissotraidis/kartpad/issues/100); phone/tablet display acceptance does not establish external-output support. |
 | How much storage does it need? | The app is about 80 MiB and extracted Mario Kart Wii data uses about 2.5 GiB. Retro Rewind downloads an additional 1.72 GiB archive and needs temporary installation space. Keeping the WBFS/ISO on the device requires more space. |
-
-## Multiplayer and controller setup
-
-Version 0.4.9 fixes physical-controller registration for Players 2–4 on Apple
-mobile devices and adds player-slot status and face-button remapping. The
-Multiplayer menu covers both games and includes experimental private Wii-server
-configuration. This is a client setting; MeleePad room codes and chat are not
-ported, and Original Mario Kart Wii private-server gameplay is not yet verified.
-See [Multiplayer and controllers](docs/MULTIPLAYER.md) for DualShock/DualSense,
-GameCube-on-iPad details, friend rooms, and Android/Kishi setup.
 
 ## Original Mario Kart Wii or Retro Rewind
 
@@ -193,49 +86,6 @@ saves, or signing material. The separately downloadable preview IPAs contain
 the compiled ahead-of-time translation described in
 [`RIGHTS_AND_LICENSES.md`](RIGHTS_AND_LICENSES.md), but none of the remaining
 retail game data.
-
-## Current status
-
-| Area | Current result |
-|---|---|
-| Android runtime | Full ARM64 Original / Retro Rewind runtime through Vulkan; physically accepted Pixel 9 Pro XL gameplay with touch and Razer Kishi. First APK: `v0.4.10-android.1`; startup/warm frame pacing and broader device coverage remain active work |
-| macOS runtime | Native arm64 dual-game Original / Retro Rewind app with standard Game, Data, Controls, and Help menus; races, saves, ghosts, Battle, and split-screen gameplay render through Metal |
-| Track coverage | All 32 retail tracks have exact native completion evidence |
-| Correctness | Darwin memory, scheduler, ABI, integer, scalar-FP, and paired-single gates pass against their defined oracles |
-| Input | Keyboard, touch, motion steering, and four independent Classic-controller slots; two-player full-race evidence passes. Direct macOS Wii Remote/Nunchuk pairing and its preset are experimental and await reporter hardware acceptance |
-| Audio | Non-silent host playback, pause/resume, live output-device migration, and a two-hour representative continuity run pass their instrumented subcases; subjective listening and the eight-hour soak remain open |
-| Performance | Warm, simple scenes can report 60 FPS; first-use shader compilation and some tracks can fall far below real time. Stable frame pacing is **not yet accepted** |
-| Packaging | The K-circuit iPhone/iPad icon and branded package pass structural audit; installed-storage, configured gameplay, save-preservation, and normal-close evidence applies to the previously accepted app candidate, while the native first-run/settings/data-management shell remains open |
-| iPhone/iPad | The full 29,065-function ARM64 retail app has been packaged as an unsigned IPA; locally signed builds have been installed and physically accepted on both iPhone and iPad, reaching live races, importing a supported private WBFS, and preserving saves |
-| Game content | Version-locked dual-mode Original Mario Kart Wii / Retro Rewind 6.12.7 flow without bundling either game's private data; 6.12.7 launch and menu navigation were accepted on physical iPad build 25; complete production-online races remain unverified |
-| Online multiplayer | Local Mac-to-iPad-Simulator race/results evidence passes; Android Retro WFC login, worldwide matchmaking and live racing are owner-reported. Complete production results/reconnect and server CSNum-history remediation remain open |
-| Distribution | Corrected iPhone/iPad IPA in `v0.4.11`, Mac ZIP in `v0.4.11-macos.1`, Android APK in `v0.4.10-android.1`; experimental tvOS IPA in `v0.4.11-tvos.1`. Downloads contain compiled translated logic, but no disc images, extracted retail assets, Retro pack, saves or private signing material |
-
-The evidence ledger, exact open rows, and known risks live in
-[`docs/STATUS.md`](docs/STATUS.md). The 67-row release matrix is in
-[`docs/PRD.md`](docs/PRD.md); a successful compile or screenshot is never
-treated as gameplay acceptance by itself.
-
-### Performance is active work
-
-KartPad is playable on Apple Silicon, but it is not yet performance-ready.
-The bundled initial pipeline cache reduces compilation work without eliminating
-it. A cold title sequence has recovered from roughly 44 FPS to 60 FPS while
-hundreds of shaders finished compiling; Moonview Highway has fallen to 1.3 FPS
-on first use and later recovered only to roughly 46–54 FPS. Audio telemetry has
-also recorded bounded drops during heavy compilation.
-
-A matched title-path test makes that cache boundary concrete: from empty cache,
-minimum effective FPS was 51.958 with an 83.783 ms maximum p99 and 20 dropped
-audio blocks; the immediate warm relaunch held at least 59.963 effective FPS
-with a 17.264 ms maximum p99 and zero drops. Track-level cold/warm profiling is
-still required.
-
-Those numbers are observations, not promises. The current performance gate is
-a controlled cold-cache/warm-cache comparison with frame-time percentiles,
-shader-cache accounting, audio-drop accounting, representative races, and a
-long soak. Until it passes, expect startup hitches, track-dependent slowdown,
-and poorer performance on iPhone than on Mac or iPad-class hardware.
 
 ## Game data
 
