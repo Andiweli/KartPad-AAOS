@@ -18,6 +18,8 @@
 
 KartPad runs a statically recompiled Mario Kart Wii runtime directly on an ARM64 Android device. WiiCompiled translates the supported game's PowerPC code ahead of time; the native runtime provides graphics, audio, input, storage and lifecycle handling.
 
+<img width="1920" height="1080" alt="kart1" src="https://github.com/user-attachments/assets/cb4b46e1-732f-47cf-bdf5-ba1fb914e794" />
+
 Gameplay runs locally, without streaming from another computer. This is a game-specific port, not a general-purpose loader for arbitrary Wii games. Its compatibility runtime draws on Dolphin-derived components and research.
 
 The two target environments are:
