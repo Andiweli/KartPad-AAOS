@@ -879,9 +879,10 @@ class KartPadActivity : SDLActivity() {
 
     private fun showAspectRatioSettings() {
         val labels = arrayOf(
-            "Original 4:3",
-            "16:9 (Experimental)",
-            "Fill Screen (Experimental)",
+            "4:3",
+            "16:9",
+            "Fullscreen (Stretched)",
+            "Fullscreen (Experimental)",
         )
         AlertDialog.Builder(this)
             .setTitle("Aspect Ratio")

@@ -1,0 +1,55 @@
+--- a/src/dynamic_aspect.cpp
++++ b/src/dynamic_aspect.cpp
+@@ -2,13 +2,20 @@
+     if (surfaceWidth == 0 || surfaceHeight == 0) {
+         return;
+     }
+-    if (g_aspectMode == 2) {
++    if (g_aspectMode == 3) {
+         // Keep the Wii/EFB coordinate system and render target stable. Dynamic EGG projection
+         // provides Hor+/Vert+ using the actual surface aspect, while Aurora stretches only the
+         // final presentation to the full native surface. This is resolution-independent.
+         AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT_SURFACE);
+         VIUnlockAspectRatio();
+         ApplyEggScreenRecords(surfaceWidth, surfaceHeight);
++    } else if (g_aspectMode == 2) {
++        // Stretch Fullscreen: render exactly the proven 16:9 layout, then let Aurora present that
++        // image non-uniformly across the full native surface. This deliberately trades geometry
++        // accuracy for guaranteed edge-to-edge coverage in boot, menus and gameplay.
++        AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT_SURFACE);
++        VILockAspectRatio(16, 9);
++        ApplyEggScreenRecords(16, 9);
+     } else if (g_aspectMode == 1) {
+         AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
+         VILockAspectRatio(16, 9);
+@@ -21,15 +28,17 @@
+ }
+ 
+ void ConfigureMkwDynamicAspect(bool widescreen, uint32_t surfaceWidth, uint32_t surfaceHeight) {
+-    ConfigureMkwMobileAspectMode(widescreen ? 2 : 0, surfaceWidth, surfaceHeight);
++    ConfigureMkwMobileAspectMode(widescreen ? 3 : 0, surfaceWidth, surfaceHeight);
+ }
+ 
+ void ConfigureMkwMobileAspectMode(int aspectMode, uint32_t surfaceWidth,
+                                   uint32_t surfaceHeight) {
+-    g_aspectMode = std::clamp(aspectMode, 0, 2);
++    g_aspectMode = std::clamp(aspectMode, 0, 3);
+     const bool widescreen = g_aspectMode != 0;
+     g_widescreenConfigured = widescreen;
+-    g_dynamicAspectRatioEnabled = g_aspectMode == 2;
++    // Both mode 2 (stretched 16:9) and mode 3 (dynamic Fullscreen) need the final
++    // surface-fill presentation policy to be reasserted before each sealed frame.
++    g_dynamicAspectRatioEnabled = g_aspectMode >= 2;
+     g_lastEggWidth43 = 0;
+     g_lastEggWidth169 = 0;
+     UpdateMkwDynamicAspectSurface(surfaceWidth, surfaceHeight);
+--- a/src/settings_overlay.cpp
++++ b/src/settings_overlay.cpp
+@@ -1,6 +1,6 @@
+     kartpad::android::DisplaySettings settings{};
+     if (kartpad::android::ConsumeDisplaySettings(&settings)) {
+         g_showFps = settings.show_fps;
+-        const int aspectMode = std::clamp(settings.aspect_mode, 0, 2);
++        const int aspectMode = std::clamp(settings.aspect_mode, 0, 3);
+         uint32_t surfaceWidth = 0;
+         uint32_t surfaceHeight = 0;

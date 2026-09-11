@@ -26,7 +26,14 @@ internal object KartPadPerformanceReport {
         }
         output.append("Newest log modified UTC: ${java.time.Instant.ofEpochMilli(log.lastModified())}\n")
         output.append("Only newest available log tail is included; it may be from a previous session.\n\n")
-        val tags = listOf("[KartPadPerf]", "[KartPadCPU]", "[KartPadGPU]", "[KartPadPhase]")
+        val tags = listOf(
+            "[KartPadPerf]",
+            "[KartPadCPU]",
+            "[KartPadGPU]",
+            "[KartPadPhase]",
+            "[KartPadPipeline]",
+            "[KartPadFullscreen]",
+        )
         var count = 0
         RandomAccessFile(log, "r").use { input ->
             val end = input.length()

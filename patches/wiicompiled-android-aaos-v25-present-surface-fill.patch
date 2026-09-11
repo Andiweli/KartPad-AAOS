@@ -1,0 +1,96 @@
+--- a/aurora-main/lib/gfx/pipeline_cache.cpp
++++ b/aurora-main/lib/gfx/pipeline_cache.cpp
+@@ -49,7 +49,7 @@ constexpr size_t MaxPipelineWorkers = 22;
+ #if defined(__ANDROID__)
+ // AAOS SoCs benefit more from leaving CPU headroom for the translated game/main thread.
+ // Priority/first-use pipelines still bypass this background limit and can use the full worker pool.
+-constexpr size_t MaxBackgroundPipelineWorkers = 2;
++constexpr size_t MaxBackgroundPipelineWorkers = 3;
+ #else
+ constexpr size_t MaxBackgroundPipelineWorkers = MaxPipelineWorkers;
+ #endif
+--- a/aurora-main/lib/window.hpp
++++ b/aurora-main/lib/window.hpp
+@@ -51,5 +51,6 @@ void set_frame_buffer_scale(float scale);
+ void set_frame_buffer_aspect_fit(bool fit);
+ void set_present_surface_fill(bool fill);
++bool present_surface_fill_enabled() noexcept;
+ void lock_present_aspect_ratio(int width, int height);
+ void unlock_present_aspect_ratio();
+ bool get_present_aspect_ratio(float& aspect) noexcept;
+--- a/aurora-main/lib/window.cpp
++++ b/aurora-main/lib/window.cpp
+@@ -557,6 +557,10 @@ void set_present_surface_fill(bool fill) {
+   g_presentSurfaceFill = fill;
+ }
+ 
++bool present_surface_fill_enabled() noexcept {
++  return g_presentSurfaceFill;
++}
++
+ void lock_present_aspect_ratio(int width, int height) {
+   g_presentAspectWidth = width;
+   g_presentAspectHeight = height;
+--- a/aurora-main/lib/aurora.cpp
++++ b/aurora-main/lib/aurora.cpp
+@@ -918,6 +918,7 @@ bool present_presentation_job(const PresentationJob& job) {
+             wgpu::RenderPassColorAttachment{
+                 .view = acquired->view,
+                 .loadOp = wgpu::LoadOp::Clear,
+                 .storeOp = wgpu::StoreOp::Store,
++                .clearValue = {.r = 0.0, .g = 0.0, .b = 0.0, .a = 1.0},
+             },
+         };
+@@ -1076,10 +1077,20 @@ void encode_presentation_snapshot(const wgpu::CommandEncoder& encoder,
+   auto viewport = webgpu::calculate_present_viewport(
+       image.texture.size.width, image.texture.size.height, presentSource.size.width,
+       presentSource.size.height);
+-  float presentAspect = 0.f;
+-  if (window::get_present_aspect_ratio(presentAspect)) {
+-    viewport = webgpu::calculate_present_viewport_for_aspect(
+-        image.texture.size.width, image.texture.size.height, presentAspect);
++  if (window::present_surface_fill_enabled()) {
++    // Surface-fill is an explicit presentation policy.  Do not feed it back through the
++    // VI/content aspect machinery: intro/menu display copies can still carry a locked 16:9
++    // aspect, which would recreate side bars even though the user selected Fill Screen.
++    viewport = {
++        0.f, 0.f, static_cast<float>(image.texture.size.width),
++        static_cast<float>(image.texture.size.height), 0.f, 1.f,
++    };
++  } else {
++    float presentAspect = 0.f;
++    if (window::get_present_aspect_ratio(presentAspect)) {
++      viewport = webgpu::calculate_present_viewport_for_aspect(
++          image.texture.size.width, image.texture.size.height, presentAspect);
++    }
+   }
+   wgpu::BindGroup presentBindGroup = presentSource.bindGroup;
+   {
+--- a/src/settings_overlay.cpp
++++ b/src/settings_overlay.cpp
+@@ -1062,6 +1062,25 @@ bool Draw() noexcept {
+     if (!FrameReadyForOverlay()) {
+         return false;
+     }
++#if defined(__ANDROID__)
++    // The game/VI path can temporarily restore FIT while boot, intro or menu display copies are
++    // active. Fill Screen is a host presentation choice, so reassert FIT_SURFACE at the last
++    // ordered point before the frame is sealed. FIT and FIT_SURFACE share the same internal EFB
++    // mapping; this changes only the final presentation policy.
++    static uint64_t fullscreenPresentEnforceCount = 0;
++    if (g_dynamicAspectRatioEnabled) {
++        AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT_SURFACE);
++        ++fullscreenPresentEnforceCount;
++        if ((fullscreenPresentEnforceCount % 300u) == 0u) {
++            uint32_t sw = 0, sh = 0, rw = 0, rh = 0;
++            AuroraGetSurfaceSize(&sw, &sh);
++            AuroraGetRenderSize(&rw, &rh);
++            KartPadAndroidLogMetric("KartPadFullscreen",
++                "event=present_enforce count=%llu enabled=1 surface=%ux%u render=%ux%u",
++                static_cast<unsigned long long>(fullscreenPresentEnforceCount), sw, sh, rw, rh);
++        }
++    }
++#endif
+     ApplyConfiguredMappings();
+     PersistDisplayModeIfChanged();
+     UpdateCursorAutoHide();

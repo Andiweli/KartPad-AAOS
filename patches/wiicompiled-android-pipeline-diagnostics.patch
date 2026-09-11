@@ -1,0 +1,189 @@
+--- a/aurora-main/lib/gfx/pipeline_cache.cpp
++++ b/aurora-main/lib/gfx/pipeline_cache.cpp
+@@ -3,4 +3,8 @@
+ #include <tracy/Tracy.hpp>
+ 
++#if defined(__ANDROID__)
++extern "C" void KartPadAndroidLogMetric(const char*, const char*, ...);
++#endif
++
+ namespace aurora::gfx {
+ static Module Log("aurora::gfx::pipeline_cache");
+@@ -15,4 +19,54 @@
+ #endif
+ 
++#if defined(__ANDROID__)
++static std::atomic<uint64_t> g_androidBackgroundCompileCount{0};
++static std::atomic<uint64_t> g_androidBackgroundCompileNanos{0};
++static std::atomic<uint64_t> g_androidBackgroundCompileMaxNanos{0};
++static std::atomic<uint64_t> g_androidPriorityCompileCount{0};
++static std::atomic<uint64_t> g_androidPriorityCompileNanos{0};
++static std::atomic<uint64_t> g_androidPriorityCompileMaxNanos{0};
++static std::atomic<uint64_t> g_androidSynchronousCompileCount{0};
++static std::atomic<uint64_t> g_androidSynchronousCompileNanos{0};
++static std::atomic<uint64_t> g_androidSynchronousCompileMaxNanos{0};
++static std::atomic<uint64_t> g_androidPipelineWaitCount{0};
++static std::atomic<uint64_t> g_androidPipelineWaitNanos{0};
++static std::atomic<uint64_t> g_androidPipelineWaitMaxNanos{0};
++
++static void android_record_max(std::atomic<uint64_t>& target, uint64_t value) noexcept {
++  auto current = target.load(std::memory_order_relaxed);
++  while (current < value &&
++         !target.compare_exchange_weak(current, value, std::memory_order_relaxed, std::memory_order_relaxed)) {
++  }
++}
++
++static void android_record_pipeline_build(bool background, bool worker, uint64_t nanos) noexcept {
++  if (!worker) {
++    g_androidSynchronousCompileCount.fetch_add(1, std::memory_order_relaxed);
++    g_androidSynchronousCompileNanos.fetch_add(nanos, std::memory_order_relaxed);
++    android_record_max(g_androidSynchronousCompileMaxNanos, nanos);
++    return;
++  }
++  if (background) {
++    g_androidBackgroundCompileCount.fetch_add(1, std::memory_order_relaxed);
++    g_androidBackgroundCompileNanos.fetch_add(nanos, std::memory_order_relaxed);
++    android_record_max(g_androidBackgroundCompileMaxNanos, nanos);
++    return;
++  }
++  g_androidPriorityCompileCount.fetch_add(1, std::memory_order_relaxed);
++  g_androidPriorityCompileNanos.fetch_add(nanos, std::memory_order_relaxed);
++  android_record_max(g_androidPriorityCompileMaxNanos, nanos);
++}
++
++static void android_record_pipeline_wait(uint64_t nanos) noexcept {
++  g_androidPipelineWaitCount.fetch_add(1, std::memory_order_relaxed);
++  g_androidPipelineWaitNanos.fetch_add(nanos, std::memory_order_relaxed);
++  android_record_max(g_androidPipelineWaitMaxNanos, nanos);
++}
++
++static double android_nanos_to_ms(uint64_t nanos) noexcept {
++  return static_cast<double>(nanos) / 1000000.0;
++}
++#endif
++
+ template <typename PipelineConfig>
+ static PipelineCacheWrite make_pipeline_cache_write(ShaderType type, PipelineRef hash, const PipelineConfig& config,
+@@ -26,5 +80,13 @@
+ 
+   if (syncCreate) {
++#if defined(__ANDROID__)
++    const auto androidBuildStart = std::chrono::steady_clock::now();
++#endif
+     const auto pipeline = cb();
++#if defined(__ANDROID__)
++    const auto androidBuildNanos = std::chrono::duration_cast<std::chrono::nanoseconds>(
++        std::chrono::steady_clock::now() - androidBuildStart).count();
++    android_record_pipeline_build(false, false, static_cast<uint64_t>(std::max<int64_t>(0, androidBuildNanos)));
++#endif
+     {
+       std::scoped_lock guard{g_pipelineMutex};
+@@ -41,8 +103,28 @@
+            g_prewarmCount, elapsed.count() / 1000.0, stats.hits, stats.lookups, stats.stores,
+            static_cast<double>(stats.hitBytes) / (1024.0 * 1024.0));
++#if defined(__ANDROID__)
++  KartPadAndroidLogMetric(
++      "KartPadPipeline",
++      "event=prewarm_finished pipelines=%u elapsed_ms=%lld dawn_hits=%llu dawn_lookups=%llu "
++      "dawn_hit_pct=%.1f dawn_stores=%llu dawn_loaded_mib=%.2f",
++      g_prewarmCount, static_cast<long long>(elapsed.count()),
++      static_cast<unsigned long long>(stats.hits), static_cast<unsigned long long>(stats.lookups),
++      stats.lookups != 0 ? 100.0 * static_cast<double>(stats.hits) / static_cast<double>(stats.lookups) : 0.0,
++      static_cast<unsigned long long>(stats.stores),
++      static_cast<double>(stats.hitBytes) / (1024.0 * 1024.0));
++#endif
+ }
+ 
+-static void compile_pending_pipeline(PendingPipeline pending) {
++static void compile_pending_pipeline(PendingPipeline pending, bool background, bool worker) {
++#if defined(__ANDROID__)
++  const auto androidBuildStart = std::chrono::steady_clock::now();
++#endif
+   auto result = pending.create();
++#if defined(__ANDROID__)
++  const auto androidBuildNanos = std::chrono::duration_cast<std::chrono::nanoseconds>(
++      std::chrono::steady_clock::now() - androidBuildStart).count();
++  android_record_pipeline_build(background, worker,
++      static_cast<uint64_t>(std::max<int64_t>(0, androidBuildNanos)));
++#endif
+   {
+     std::lock_guard lock{g_pipelineMutex};
+@@ -58,5 +140,5 @@
+       }
+     }
+-    compile_pending_pipeline(std::move(pending));
++    compile_pending_pipeline(std::move(pending), background, true);
+     if (background) {
+       {
+@@ -72,5 +154,5 @@
+       source.pop_front();
+     }
+-    compile_pending_pipeline(std::move(pending));
++    compile_pending_pipeline(std::move(pending), false, false);
+     ++g_pipelinesPerFrame;
+   }
+@@ -90,4 +172,32 @@
+ }
+ 
++#if defined(__ANDROID__)
++extern "C" void AuroraAndroidLogPipelineDiagnostics() {
++  const auto stats = webgpu::blob_cache_stats();
++  const auto bgCount = g_androidBackgroundCompileCount.load(std::memory_order_relaxed);
++  const auto priorityCount = g_androidPriorityCompileCount.load(std::memory_order_relaxed);
++  const auto syncCount = g_androidSynchronousCompileCount.load(std::memory_order_relaxed);
++  const auto waitCount = g_androidPipelineWaitCount.load(std::memory_order_relaxed);
++  KartPadAndroidLogMetric(
++      "KartPadPipeline",
++      "event=sample workers=%zu queued=%u bg_count=%llu bg_total_ms=%.2f bg_max_ms=%.2f "
++      "priority_count=%llu priority_total_ms=%.2f priority_max_ms=%.2f "
++      "sync_count=%llu sync_total_ms=%.2f sync_max_ms=%.2f waits=%llu wait_total_ms=%.2f wait_max_ms=%.2f "
++      "dawn_hits=%llu dawn_lookups=%llu dawn_hit_pct=%.1f dawn_stores=%llu dawn_loaded_mib=%.2f",
++      g_pipelineThreads.size(), queued_pipeline_count(),
++      static_cast<unsigned long long>(bgCount), android_nanos_to_ms(g_androidBackgroundCompileNanos.load(std::memory_order_relaxed)),
++      android_nanos_to_ms(g_androidBackgroundCompileMaxNanos.load(std::memory_order_relaxed)),
++      static_cast<unsigned long long>(priorityCount), android_nanos_to_ms(g_androidPriorityCompileNanos.load(std::memory_order_relaxed)),
++      android_nanos_to_ms(g_androidPriorityCompileMaxNanos.load(std::memory_order_relaxed)),
++      static_cast<unsigned long long>(syncCount), android_nanos_to_ms(g_androidSynchronousCompileNanos.load(std::memory_order_relaxed)),
++      android_nanos_to_ms(g_androidSynchronousCompileMaxNanos.load(std::memory_order_relaxed)),
++      static_cast<unsigned long long>(waitCount), android_nanos_to_ms(g_androidPipelineWaitNanos.load(std::memory_order_relaxed)),
++      android_nanos_to_ms(g_androidPipelineWaitMaxNanos.load(std::memory_order_relaxed)),
++      static_cast<unsigned long long>(stats.hits), static_cast<unsigned long long>(stats.lookups),
++      stats.lookups != 0 ? 100.0 * static_cast<double>(stats.hits) / static_cast<double>(stats.lookups) : 0.0,
++      static_cast<unsigned long long>(stats.stores), static_cast<double>(stats.hitBytes) / (1024.0 * 1024.0));
++}
++#endif
++
+ bool try_pipeline(PipelineRef ref, wgpu::RenderPipeline& pipeline) {
+   std::scoped_lock lock{g_pipelineMutex};
+@@ -103,4 +213,7 @@
+   if (!g_pipelines.contains(ref) && g_pendingPipelines.contains(ref)) {
+     ZoneScopedN("wait_pipeline");
++#if defined(__ANDROID__)
++    const auto androidWaitStart = std::chrono::steady_clock::now();
++#endif
+     const auto finished = [ref] {
+       return g_pipelines.contains(ref) || !g_pendingPipelines.contains(ref) || g_pipelineThreadEnd;
+@@ -114,4 +227,9 @@
+     }
+     g_pipelineCv.wait(lock, finished);
++#if defined(__ANDROID__)
++    const auto androidWaitNanos = std::chrono::duration_cast<std::chrono::nanoseconds>(
++        std::chrono::steady_clock::now() - androidWaitStart).count();
++    android_record_pipeline_wait(static_cast<uint64_t>(std::max<int64_t>(0, androidWaitNanos)));
++#endif
+   }
+   const auto it = g_pipelines.find(ref);
+--- a/src/settings_overlay.cpp
++++ b/src/settings_overlay.cpp
+@@ -3,4 +3,5 @@
+ #include <time.h>
+ extern "C" void KartPadAndroidLogMetric(const char*, const char*, ...);
++extern "C" void AuroraAndroidLogPipelineDiagnostics();
+ #include "wup028_adapter.h"
+ 
+@@ -12,4 +13,5 @@
+                 stats != nullptr ? stats->queuedPipelines : 0,
+                 stats != nullptr ? stats->createdPipelines : 0);
++        AuroraAndroidLogPipelineDiagnostics();
+         lastTelemetryPresentCount = presentTiming.totalPresentCount;
+         // Once per telemetry interval, not per instruction/frame. CPU occupancy

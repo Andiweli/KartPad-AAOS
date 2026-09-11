@@ -20,6 +20,7 @@ internal object KartPadTouchSettings {
     private const val MODERN_C_STICK = "modern_c_stick_horizontal"
     private const val SHOW_FPS = "show_fps"
     private const val ASPECT_MODE = "aspect_mode"
+    private const val ASPECT_MODE_V26_MIGRATED = "aspect_mode_v26_migrated"
     private const val RESOLUTION_SCALE = "resolution_scale"
     private const val MOTION_ENABLED = "motion_steering_enabled"
     private const val MOTION_INVERTED = "motion_steering_inverted"
@@ -70,11 +71,27 @@ internal object KartPadTouchSettings {
         preferences(context).edit().putBoolean(SHOW_FPS, value).apply()
     }
 
-    fun aspectMode(context: Context): Int = preferences(context)
-        .getInt(ASPECT_MODE, 0).coerceIn(0, 2)
+    fun aspectMode(context: Context): Int {
+        val prefs = preferences(context)
+        if (!prefs.getBoolean(ASPECT_MODE_V26_MIGRATED, false)) {
+            // v25 and earlier used mode 2 for the existing dynamic Fullscreen mode.
+            // Keep that user choice intact when inserting Stretch Fullscreen as new mode 2.
+            val oldMode = prefs.getInt(ASPECT_MODE, 0).coerceIn(0, 2)
+            val migratedMode = if (oldMode == 2) 3 else oldMode
+            prefs.edit()
+                .putInt(ASPECT_MODE, migratedMode)
+                .putBoolean(ASPECT_MODE_V26_MIGRATED, true)
+                .apply()
+            return migratedMode
+        }
+        return prefs.getInt(ASPECT_MODE, 0).coerceIn(0, 3)
+    }
 
     fun setAspectMode(context: Context, value: Int) {
-        preferences(context).edit().putInt(ASPECT_MODE, value.coerceIn(0, 2)).apply()
+        preferences(context).edit()
+            .putInt(ASPECT_MODE, value.coerceIn(0, 3))
+            .putBoolean(ASPECT_MODE_V26_MIGRATED, true)
+            .apply()
     }
 
     fun resolutionScale(context: Context): Float = preferences(context)

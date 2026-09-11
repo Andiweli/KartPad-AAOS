@@ -79,6 +79,14 @@ patch --batch -p1 -d "$runtime_source" < \
 patch --batch -p1 -d "$runtime_source" < \
   "$repo_root/patches/wiicompiled-android-exportable-metrics.patch"
 patch --batch -p1 -d "$runtime_source" < \
+  "$repo_root/patches/wiicompiled-android-pipeline-diagnostics.patch"
+patch --batch -p1 -d "$runtime_source" < \
+  "$repo_root/patches/wiicompiled-android-aaos-v22-tuning.patch"
+patch --batch -p1 -d "$runtime_source" < \
+  "$repo_root/patches/wiicompiled-android-aaos-v25-present-surface-fill.patch"
+patch --batch -p1 -d "$runtime_source" < \
+  "$repo_root/patches/wiicompiled-android-aaos-v26-stretch-fullscreen.patch"
+patch --batch -p1 -d "$runtime_source" < \
   "$repo_root/patches/aurora-android-phase-metrics.patch"
 patch --batch -p1 -d "$runtime_source" < \
   "$repo_root/patches/wiicompiled-android-scalar-ni-transition.patch"

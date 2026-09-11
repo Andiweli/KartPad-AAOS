@@ -375,7 +375,6 @@ class AndroidTouchOverlayContractTests(unittest.TestCase):
         for label in (
             "Original 4:3",
             "16:9 (Experimental)",
-            "Fill Screen (Experimental)",
             "1× (Native)",
             "2×",
             "3×",
@@ -383,6 +382,9 @@ class AndroidTouchOverlayContractTests(unittest.TestCase):
         ):
             self.assertIn(label, ios)
             self.assertIn(label, android)
+        self.assertIn("Fill Screen (Experimental)", ios)
+        self.assertIn("Stretch Fullscreen (Experimental)", android)
+        self.assertIn('"Fullscreen"', android)
         self.assertNotIn('arrayOf("4:3", "16:9", "Fill Screen")', android)
         self.assertNotIn('arrayOf("Native (1x)", "2x", "3x", "4x")', android)
         self.assertIn(".getInt(ASPECT_MODE, 0)", settings)

@@ -1,0 +1,61 @@
+--- a/aurora-main/include/dolphin/gx/GXAurora.h
++++ b/aurora-main/include/dolphin/gx/GXAurora.h
+@@ -63,11 +63,13 @@
+ typedef enum _AuroraViewportPolicy {
+   AURORA_VIEWPORT_FIT = 0,     // Preserve logical aspect in the content framebuffer
+   AURORA_VIEWPORT_STRETCH = 1, // Match content framebuffer aspect to the native surface
+   AURORA_VIEWPORT_NATIVE = 2,  // Use active framebuffer pixels directly
++  AURORA_VIEWPORT_FIT_SURFACE = 3, // Preserve content framebuffer sizing, fill native surface at presentation
+ } AuroraViewportPolicy;
+ 
+ /**
+  * Configures content framebuffer sizing and how GXSetViewport/GXSetScissor parameters are applied to rendering.
++ * AURORA_VIEWPORT_FIT_SURFACE keeps guest render coordinates stable while presenting to the full native surface.
+  * When AURORA_VIEWPORT_NATIVE is used, GXSetTexCopySrc/GXSetTexCopyDst will use native framebuffer resolution.
+  */
+ void AuroraSetViewportPolicy(AuroraViewportPolicy policy);
+--- a/aurora-main/lib/dolphin/gx/GXAurora.cpp
++++ b/aurora-main/lib/dolphin/gx/GXAurora.cpp
+@@ -44,8 +44,10 @@ void AuroraSetViewportPolicy(AuroraViewportPolicy policy) {
+     aurora::gx::fifo::drain();
+   }
+   g_gxState.viewportPolicy = policy;
+-  aurora::window::set_frame_buffer_aspect_fit(policy == AURORA_VIEWPORT_FIT);
+-  aurora::window::set_present_surface_fill(policy == AURORA_VIEWPORT_STRETCH);
++  const bool fitFrameBuffer = policy == AURORA_VIEWPORT_FIT || policy == AURORA_VIEWPORT_FIT_SURFACE;
++  const bool fillPresentSurface = policy == AURORA_VIEWPORT_STRETCH || policy == AURORA_VIEWPORT_FIT_SURFACE;
++  aurora::window::set_frame_buffer_aspect_fit(fitFrameBuffer);
++  aurora::window::set_present_surface_fill(fillPresentSurface);
+   if (changed && aurora::window::get_sdl_window() != nullptr) {
+     // Reapply the guest viewport and scissor after a resize.
+     aurora::gx::set_logical_viewport(g_gxState.logicalViewport);
+--- a/aurora-main/lib/gfx/pipeline_cache.cpp
++++ b/aurora-main/lib/gfx/pipeline_cache.cpp
+@@ -45,6 +45,12 @@ constexpr size_t ReservedLogicalProcessors = 2;
+ constexpr size_t MaxPipelineWorkers = 22;
+ // Cached clear and GX pipelines are prewarmed using the full worker pool.
+-constexpr size_t MaxBackgroundPipelineWorkers = MaxPipelineWorkers;
++#if defined(__ANDROID__)
++// AAOS SoCs benefit more from leaving CPU headroom for the translated game/main thread.
++// Priority/first-use pipelines still bypass this background limit and can use the full worker pool.
++constexpr size_t MaxBackgroundPipelineWorkers = 2;
++#else
++constexpr size_t MaxBackgroundPipelineWorkers = MaxPipelineWorkers;
++#endif
+ // For synchronous pipeline fallback (OpenGL)
+ #ifdef NDEBUG
+ constexpr size_t BuildPipelinesPerFrame = 5;
+--- a/src/dynamic_aspect.cpp
++++ b/src/dynamic_aspect.cpp
+@@ -171,7 +171,10 @@ void UpdateMkwDynamicAspectSurface(uint32_t surfaceWidth, uint32_t surfaceHeight) {
+         return;
+     }
+     if (g_aspectMode == 2) {
+-        AuroraSetViewportPolicy(AURORA_VIEWPORT_STRETCH);
++        // Keep the Wii/EFB coordinate system and render target stable. Dynamic EGG projection
++        // provides Hor+/Vert+ using the actual surface aspect, while Aurora stretches only the
++        // final presentation to the full native surface. This is resolution-independent.
++        AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT_SURFACE);
+         VIUnlockAspectRatio();
+         ApplyEggScreenRecords(surfaceWidth, surfaceHeight);
+     } else if (g_aspectMode == 1) {

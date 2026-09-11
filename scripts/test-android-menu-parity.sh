@@ -242,7 +242,8 @@ assert_labels \
   "Aspect Ratio" \
   "Original 4:3" \
   "16:9 (Experimental)" \
-  "Fill Screen (Experimental)"
+  "Stretch Fullscreen (Experimental)" \
+  "Fullscreen"
 
 open_submenu_action "Display" "Render Resolution…"
 assert_labels "Render Resolution" "1× (Native)" "2×" "3×" "4×"
